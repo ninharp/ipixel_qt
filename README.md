@@ -113,8 +113,12 @@ ipixel-studio
 Enter the panel's MAC (or scan for it) and click Connect. The user interface is available in English and German. It follows the system language on first
 start and can be switched under View → Language / Sprache (the app offers to restart).
 
-- **Image & animation:** pixel editor at panel size (pen, eraser, line, rectangle, ellipse,
-  fill, eyedropper; right-click paints with the background colour), frames with individual
+- **Image & animation:** pixel editor at panel size (select, pen, eraser, line, rectangle,
+  ellipse, fill, eyedropper; right-click paints with the background colour). Select a region and
+  drag it, cut/copy/paste it (also to and from other programs) or clear it. Arrow keys and the
+  arrow buttons move the selection, or the whole frame with wrap-around when nothing is
+  selected (Shift: 4 pixels); "as new frame" appends a shifted copy per step, so a scrolling
+  animation takes a few clicks, and "all frames" moves the whole animation. Frames with individual
   durations, onion skin, preview playback, undo/redo. Opens PNG/GIF/JPEG, saves losslessly as
   (A)PNG, exports GIF. Sends a single image (PNG) or the animation (GIF), either display-only or
   stored in slot 1–99. **Live:** every edit and the playing preview appear on the panel at once.

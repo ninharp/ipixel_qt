@@ -13,6 +13,7 @@ from .. import render
 
 Color = tuple[int, int, int]
 Point = tuple[int, int]
+Box = tuple[int, int, int, int]
 
 DEFAULT_DURATION = 100
 UNDO_LIMIT = 200
@@ -170,6 +171,41 @@ class Animation:
             img.putpixel((x, y), color)
             stack.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
         self.changed()
+
+    # Rectangular regions (boxes are inclusive: x0, y0, x1, y1)
+
+    def clip_box(self, box: Box) -> Box | None:
+        x0, y0, x1, y1 = _box((box[0], box[1]), (box[2], box[3]))
+        x0, y0 = max(0, x0), max(0, y0)
+        x1, y1 = min(self.width - 1, x1), min(self.height - 1, y1)
+        return (x0, y0, x1, y1) if x0 <= x1 and y0 <= y1 else None
+
+    def crop(self, box: Box | None = None) -> Image.Image:
+        if box is None:
+            return self.image.copy()
+        x0, y0, x1, y1 = box
+        return self.image.crop((x0, y0, x1 + 1, y1 + 1))
+
+    def fill_box(self, box: Box, color: Color) -> None:
+        x0, y0, x1, y1 = box
+        self.image.paste(color, (x0, y0, x1 + 1, y1 + 1))
+        self.changed()
+
+    def stamp(self, img: Image.Image, x: int, y: int) -> None:
+        """Paste ``img`` with its top-left at (x, y); parts outside the frame are dropped."""
+        self.image.paste(img.convert("RGB"), (x, y))
+        self.changed()
+
+    def move_box(self, box: Box, dx: int, dy: int, background: Color, all_frames: bool = False) -> Box:
+        """Move a region's pixels, leaving the background colour behind. Returns the moved box."""
+        self.checkpoint()
+        x0, y0, x1, y1 = box
+        for f in self.frames if all_frames else [self.frame]:
+            piece = f.image.crop((x0, y0, x1 + 1, y1 + 1))
+            f.image.paste(background, (x0, y0, x1 + 1, y1 + 1))
+            f.image.paste(piece, (x0 + dx, y0 + dy))
+        self.changed()
+        return (x0 + dx, y0 + dy, x1 + dx, y1 + dy)
 
     # Whole-frame operations (record their own undo step)
 

@@ -81,6 +81,48 @@ def test_line_points_diagonal():
     assert line_points((0, 0), (3, 3)) == [(0, 0), (1, 1), (2, 2), (3, 3)]
 
 
+def test_move_box_leaves_background_and_is_undoable():
+    a = Animation(8, 4)
+    a.rect((1, 1), (2, 2), RED, fill=True)
+    moved = a.move_box((1, 1, 2, 2), 3, 0, BLUE)
+    assert moved == (4, 1, 5, 2)
+    assert a.pixel((4, 1)) == RED and a.pixel((5, 2)) == RED
+    assert a.pixel((1, 1)) == BLUE
+    a.undo()
+    assert a.pixel((1, 1)) == RED and a.pixel((4, 1)) == (0, 0, 0)
+
+
+def test_move_box_off_edge_is_clipped():
+    a = Animation(4, 4)
+    a.plot([(3, 0)], RED)
+    a.move_box((3, 0, 3, 0), 2, 0, (0, 0, 0))
+    assert all(a.pixel((x, 0)) == (0, 0, 0) for x in range(4))
+
+
+def test_move_box_on_all_frames():
+    a = Animation(4, 2)
+    a.plot([(0, 0)], RED)
+    a.add_frame(True)
+    a.move_box((0, 0, 0, 0), 1, 0, (0, 0, 0), all_frames=True)
+    assert [f.image.getpixel((1, 0)) for f in a.frames] == [RED, RED]
+
+
+def test_crop_and_stamp_copy_a_region():
+    a = Animation(6, 2)
+    a.plot([(0, 0), (1, 1)], RED)
+    piece = a.crop((0, 0, 1, 1))
+    a.stamp(piece, 4, 0)
+    assert a.pixel((4, 0)) == RED and a.pixel((5, 1)) == RED
+    a.stamp(piece, 5, 1)  # partly outside: no error
+    assert a.pixel((5, 1)) == RED
+
+
+def test_clip_box_normalises_and_clips():
+    a = Animation(4, 4)
+    assert a.clip_box((3, 3, -2, 1)) == (0, 1, 3, 3)
+    assert a.clip_box((5, 5, 9, 9)) is None
+
+
 def test_resize_canvas_keeps_pixels():
     a = Animation(4, 4)
     a.plot([(1, 1)], RED)

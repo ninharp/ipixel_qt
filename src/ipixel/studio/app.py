@@ -206,17 +206,25 @@ class MainWindow(QMainWindow):
         self.undo_act = self._action(edit, tr("Rückgängig"), QKeySequence.StandardKey.Undo, self.doc.undo)
         self.redo_act = self._action(edit, tr("Wiederholen"), QKeySequence.StandardKey.Redo, self.doc.redo)
         edit.addSeparator()
-        self._action(edit, tr("Bild leeren"), "Delete", lambda: self.doc.clear(self.editor.canvas.background))
-        self._action(edit, tr("Alle Bilder leeren"), None, lambda: self.doc.clear(self.editor.canvas.background, True))
+        ed = self.editor
+        self._action(edit, tr("Ausschneiden"), QKeySequence.StandardKey.Cut, ed.cut)
+        self._action(edit, tr("Kopieren"), QKeySequence.StandardKey.Copy, ed.copy)
+        self._action(edit, tr("Einfügen"), QKeySequence.StandardKey.Paste, ed.paste)
+        delete = self._action(edit, tr("Auswahl oder Bild leeren"), None, ed.delete)
+        delete.setShortcuts([QKeySequence("Delete"), QKeySequence("Backspace")])
+        self._action(edit, tr("Alle Bilder leeren"), None, lambda: self.doc.clear(ed.canvas.background, True))
+        edit.addSeparator()
+        self._action(edit, tr("Alles auswählen"), QKeySequence.StandardKey.SelectAll, ed.select_all)
+        self._action(edit, tr("Auswahl aufheben"), "Ctrl+Shift+A", ed.select_none)
         edit.addSeparator()
         for label, key, args in [(tr("Nach links schieben"), "Ctrl+Left", (-1, 0)),
                                  (tr("Nach rechts schieben"), "Ctrl+Right", (1, 0)),
                                  (tr("Nach oben schieben"), "Ctrl+Up", (0, -1)),
                                  (tr("Nach unten schieben"), "Ctrl+Down", (0, 1))]:
-            self._action(edit, label, key, lambda a=args: self.doc.shift(*a))
+            self._action(edit, label, key, lambda a=args: ed.nudge(*a))
         edit.addSeparator()
-        self._action(edit, tr("Waagerecht spiegeln"), "Ctrl+H", lambda: self.doc.flip(True))
-        self._action(edit, tr("Senkrecht spiegeln"), "Ctrl+Shift+H", lambda: self.doc.flip(False))
+        self._action(edit, tr("Waagerecht spiegeln"), "Ctrl+Alt+H", lambda: self.doc.flip(True))
+        self._action(edit, tr("Senkrecht spiegeln"), "Ctrl+Alt+V", lambda: self.doc.flip(False))
         edit.addSeparator()
         self._action(edit, tr("Panelgröße ändern …"), None, self.ask_size)
 

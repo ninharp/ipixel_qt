@@ -5,8 +5,20 @@ from __future__ import annotations
 from enum import Enum
 
 from PIL import Image
-from PySide6.QtCore import QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QColor, QIcon, QImage, QKeySequence, QMouseEvent, QPainter, QPen, QPixmap
+from PySide6.QtCore import QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import (
+    QAction,
+    QColor,
+    QGuiApplication,
+    QIcon,
+    QImage,
+    QKeyEvent,
+    QKeySequence,
+    QMouseEvent,
+    QPainter,
+    QPen,
+    QPixmap,
+)
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -28,7 +40,7 @@ from PySide6.QtWidgets import (
 from .. import protocol as p
 from .device import DeviceController
 from .i18n import tr
-from .model import Animation, Color, Point
+from .model import Animation, Box, Color, Point
 
 PALETTE: list[Color] = [
     (0, 0, 0), (255, 255, 255), (128, 128, 128), (64, 64, 64),
@@ -39,6 +51,7 @@ PALETTE: list[Color] = [
 
 
 class Tool(Enum):
+    SELECT = ("Auswahl", "M")
     PEN = ("Stift", "P")
     ERASER = ("Radierer", "E")
     LINE = ("Linie", "L")
@@ -75,6 +88,8 @@ def color_icon(color: Color, size: int = 18) -> QIcon:
 class PixelCanvas(QWidget):
     hovered = Signal(object)
     colorPicked = Signal(tuple)
+    nudge = Signal(int, int)
+    selectionChanged = Signal()
 
     def __init__(self, doc: Animation, parent: QWidget | None = None):
         super().__init__(parent)
@@ -85,9 +100,11 @@ class PixelCanvas(QWidget):
         self.pen_size = 1
         self.grid = True
         self.onion = False
+        self.selection: Box | None = None
         self._last: Point | None = None
         self._start: Point | None = None
         self._base: Image.Image | None = None
+        self._floating: tuple[Image.Image, Box] | None = None
         self._paint_color: Color = self.color
         self.setMouseTracking(True)
         self.setMinimumSize(320, 120)
@@ -124,10 +141,74 @@ class PixelCanvas(QWidget):
                 qp.drawLine(int(ox + x * c), int(oy), int(ox + x * c), int(oy + h))
             for y in range(self.doc.height + 1):
                 qp.drawLine(int(ox), int(oy + y * c), int(ox + w), int(oy + y * c))
+        if self.selection:
+            x0, y0, x1, y1 = self.selection
+            box = QRectF(ox + x0 * c, oy + y0 * c, (x1 - x0 + 1) * c, (y1 - y0 + 1) * c)
+            qp.setPen(QPen(QColor(0, 0, 0), 2))
+            qp.drawRect(box)
+            qp.setPen(QPen(QColor(255, 255, 255), 2, Qt.PenStyle.DashLine))
+            qp.drawRect(box)
+
+    def set_selection(self, box: Box | None) -> None:
+        self.selection = self.doc.clip_box(box) if box else None
+        self.update()
+        self.selectionChanged.emit()
+
+    def keyPressEvent(self, e: QKeyEvent) -> None:
+        mods = e.modifiers()
+        step = 4 if mods & Qt.KeyboardModifier.ShiftModifier else 1
+        other = mods & ~(Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.KeypadModifier)
+        arrows = {Qt.Key.Key_Left: (-step, 0), Qt.Key.Key_Right: (step, 0),
+                  Qt.Key.Key_Up: (0, -step), Qt.Key.Key_Down: (0, step)}
+        if e.key() in arrows and other == Qt.KeyboardModifier.NoModifier:
+            self.nudge.emit(*arrows[e.key()])
+        elif e.key() == Qt.Key.Key_Escape and self.selection:
+            self.set_selection(None)
+        else:
+            super().keyPressEvent(e)
+
+    def _select_press(self, pt: Point, right: bool) -> None:
+        sel = self.selection
+        if right:
+            self.set_selection(None)
+            return
+        if sel and sel[0] <= pt[0] <= sel[2] and sel[1] <= pt[1] <= sel[3]:
+            # Lift the selected pixels so they can be dragged.
+            self.doc.checkpoint()
+            self._floating = (self.doc.crop(sel), sel)
+            self.doc.image.paste(self.background, (sel[0], sel[1], sel[2] + 1, sel[3] + 1))
+            self._base = self.doc.image.copy()
+        self._start = self._last = pt
+        if not self._floating:
+            self.set_selection((pt[0], pt[1], pt[0], pt[1]))
+
+    def _select_move(self, pt: Point) -> None:
+        assert self._start is not None
+        if self._floating:
+            piece, (x0, y0, x1, y1) = self._floating
+            dx, dy = pt[0] - self._start[0], pt[1] - self._start[1]
+            self.doc.image.paste(self._base)
+            self.doc.stamp(piece, x0 + dx, y0 + dy)
+            self.selection = (x0 + dx, y0 + dy, x1 + dx, y1 + dy)
+            self.update()
+        else:
+            self.set_selection((self._start[0], self._start[1], pt[0], pt[1]))
+
+    def _select_release(self, pt: Point | None) -> None:
+        if self._floating:
+            piece, origin = self._floating
+            if self.selection == origin:
+                self.doc.stamp(piece, origin[0], origin[1])
+            self.set_selection(self.selection)
+        elif pt == self._start:
+            self.set_selection(None)
 
     def mousePressEvent(self, e: QMouseEvent) -> None:
         pt = self.to_pixel(e.position())
         right = e.button() == Qt.MouseButton.RightButton
+        if self.tool is Tool.SELECT:
+            self._select_press(pt, right)
+            return
         self._paint_color = self.background if (right or self.tool is Tool.ERASER) else self.color
         if self.tool is Tool.PICKER:
             if self.doc.in_bounds(pt):
@@ -149,15 +230,20 @@ class PixelCanvas(QWidget):
         self.hovered.emit(pt if self.doc.in_bounds(pt) else None)
         if self._start is None or pt == self._last:
             return
-        if self.tool in SHAPES:
+        if self.tool is Tool.SELECT:
+            self._select_move(pt)
+        elif self.tool in SHAPES:
             self._draw_shape(pt)
         else:
             self.doc.line(self._last, pt, self._paint_color, self.pen_size)
         self._last = pt
 
-    def mouseReleaseEvent(self, _e: QMouseEvent) -> None:
+    def mouseReleaseEvent(self, e: QMouseEvent) -> None:
+        if self.tool is Tool.SELECT and self._start is not None:
+            self._select_release(self.to_pixel(e.position()))
         self._start = self._last = None
         self._base = None
+        self._floating = None
 
     def leaveEvent(self, _e) -> None:
         self.hovered.emit(None)
@@ -321,7 +407,11 @@ class EditorTab(QWidget):
         onion_cb.toggled.connect(self._set_onion)
         tools.addWidget(grid_cb)
         tools.addWidget(onion_cb)
+        tools.addWidget(self._move_box())
         tools.addStretch()
+        self._clipboard: Image.Image | None = None
+        self._setting_clipboard = False
+        QGuiApplication.clipboard().dataChanged.connect(self._system_clipboard_changed)
 
         right = QVBoxLayout()
         right.addWidget(self._color_box())
@@ -338,6 +428,8 @@ class EditorTab(QWidget):
         lay.addWidget(self.timeline)
 
         self.canvas.colorPicked.connect(self._picked)
+        self.canvas.nudge.connect(self.nudge)
+        self.canvas.selectionChanged.connect(self._update_move_hint)
         self.canvas.hovered.connect(lambda pt: self.status.emit(f"x {pt[0]}  y {pt[1]}" if pt else ""))
         doc.subscribe(self._doc_changed)
         device.liveChanged.connect(self._live_changed)
@@ -345,6 +437,113 @@ class EditorTab(QWidget):
         self._update_send_enabled()
 
     # Panels
+
+    def _move_box(self) -> QGroupBox:
+        box = QGroupBox(tr("Verschieben"))
+        lay = QVBoxLayout(box)
+        pad = QGridLayout()
+        pad.setSpacing(2)
+        for text, (dx, dy), (row, col), tip in [
+            ("↑", (0, -1), (0, 1), tr("Nach oben (Pfeiltaste, mit Umschalt 4 Pixel)")),
+            ("←", (-1, 0), (1, 0), tr("Nach links (Pfeiltaste, mit Umschalt 4 Pixel)")),
+            ("→", (1, 0), (1, 2), tr("Nach rechts (Pfeiltaste, mit Umschalt 4 Pixel)")),
+            ("↓", (0, 1), (2, 1), tr("Nach unten (Pfeiltaste, mit Umschalt 4 Pixel)")),
+        ]:
+            b = QToolButton()
+            b.setText(text)
+            b.setToolTip(tip)
+            b.setFixedSize(34, 30)
+            b.setAutoRepeat(True)
+            b.clicked.connect(lambda _=False, d=(dx, dy): self.nudge(*d))
+            pad.addWidget(b, row, col)
+        lay.addLayout(pad)
+        self.move_new_frame = QCheckBox(tr("als neues Bild"))
+        self.move_new_frame.setToolTip(tr("Jeder Schritt hängt eine verschobene Kopie als neues Bild an"))
+        self.move_all = QCheckBox(tr("alle Bilder"))
+        self.move_all.setToolTip(tr("Alle Bilder der Animation gemeinsam verschieben"))
+        self.move_new_frame.toggled.connect(lambda on: self.move_all.setEnabled(not on))
+        lay.addWidget(self.move_new_frame)
+        lay.addWidget(self.move_all)
+        self.move_hint = QLabel()
+        self.move_hint.setWordWrap(True)
+        self.move_hint.setStyleSheet("color: gray; font-size: 11px")
+        lay.addWidget(self.move_hint)
+        self._update_move_hint()
+        return box
+
+    def _update_move_hint(self) -> None:
+        self.move_hint.setText(tr("verschiebt die Auswahl") if self.canvas.selection else tr("verschiebt das ganze Bild"))
+
+    # Selection, clipboard, moving
+
+    def nudge(self, dx: int, dy: int) -> None:
+        """Move the selection, or the whole frame (wrapping around) when nothing is selected."""
+        if self.move_new_frame.isChecked():
+            self.doc.add_frame(duplicate=True)
+        all_frames = self.move_all.isChecked() and not self.move_new_frame.isChecked()
+        sel = self.canvas.selection
+        if sel:
+            moved = self.doc.move_box(sel, dx, dy, self.canvas.background, all_frames=all_frames)
+            self.canvas.set_selection(moved)
+        else:
+            self.doc.shift(dx, dy, all_frames=all_frames)
+
+    def select_all(self) -> None:
+        self.set_tool(Tool.SELECT)
+        self.canvas.set_selection((0, 0, self.doc.width - 1, self.doc.height - 1))
+
+    def select_none(self) -> None:
+        self.canvas.set_selection(None)
+
+    def copy(self) -> None:
+        piece = self.doc.crop(self.canvas.selection)
+        self._setting_clipboard = True
+        QGuiApplication.clipboard().setImage(pil_to_qimage(piece))
+        self._setting_clipboard = False
+        self._clipboard = piece
+
+    def _system_clipboard_changed(self) -> None:
+        if not self._setting_clipboard:
+            self._clipboard = None
+
+    def cut(self) -> None:
+        self.copy()
+        self.delete()
+
+    def paste(self) -> None:
+        """Paste at the selection's corner (or top-left) and select the pasted pixels for dragging."""
+        piece = self._clipboard_image()
+        if piece is None:
+            return
+        x, y = self.canvas.selection[:2] if self.canvas.selection else (0, 0)
+        self.doc.checkpoint()
+        self.doc.stamp(piece, x, y)
+        self.set_tool(Tool.SELECT)
+        self.canvas.set_selection((x, y, x + piece.width - 1, y + piece.height - 1))
+
+    def delete(self) -> None:
+        sel = self.canvas.selection
+        if sel:
+            self.doc.checkpoint()
+            self.doc.fill_box(sel, self.canvas.background)
+        else:
+            self.doc.clear(self.canvas.background)
+
+    def _clipboard_image(self) -> Image.Image | None:
+        if self._clipboard is not None:
+            return self._clipboard
+        qimg = QGuiApplication.clipboard().image()
+        if not qimg.isNull():
+            # Copied in another program: take it, shrunk to the panel if needed.
+            rgb = qimg.convertToFormat(QImage.Format.Format_RGB888)
+            data = bytes(rgb.constBits())[: rgb.bytesPerLine() * rgb.height()]
+            img = Image.frombuffer("RGB", (rgb.width(), rgb.height()), data, "raw", "RGB", rgb.bytesPerLine(), 1)
+            if img.width > self.doc.width or img.height > self.doc.height:
+                from .. import render
+
+                img = render.fit(img, min(img.width, self.doc.width), min(img.height, self.doc.height))
+            return img
+        return None
 
     def _color_box(self) -> QGroupBox:
         box = QGroupBox(tr("Farbe"))
@@ -458,6 +657,7 @@ class EditorTab(QWidget):
 
     def _doc_changed(self) -> None:
         self.canvas.update()
+        self._update_move_hint()
         if len(self.doc.frames) != self._frame_count or self.doc.index != self._last_index:
             self._frame_count, self._last_index = len(self.doc.frames), self.doc.index
             self.timeline.refresh()

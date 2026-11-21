@@ -54,6 +54,82 @@ def test_fill_tool_and_frames_timeline(window):
     assert window.editor.timeline.list.currentRow() == 1
 
 
+def _drag(canvas, a, b):
+    QTest.mousePress(canvas, Qt.MouseButton.LeftButton, pos=_cell_center(canvas, *a))
+    QTest.mouseMove(canvas, _cell_center(canvas, *b))
+    QTest.mouseRelease(canvas, Qt.MouseButton.LeftButton, pos=_cell_center(canvas, *b))
+
+
+RED = (255, 0, 0)
+
+
+def test_select_and_drag_moves_pixels(window):
+    ed, canvas, doc = window.editor, window.editor.canvas, window.doc
+    doc.rect((2, 2), (4, 4), RED, fill=True)
+    ed.set_tool(Tool.SELECT)
+    _drag(canvas, (2, 2), (4, 4))
+    assert canvas.selection == (2, 2, 4, 4)
+    _drag(canvas, (3, 3), (13, 5))
+    assert canvas.selection == (12, 4, 14, 6)
+    assert doc.pixel((12, 4)) == RED and doc.pixel((2, 2)) == (0, 0, 0)
+    window.undo_act.trigger()
+    assert doc.pixel((2, 2)) == RED
+
+
+def test_click_inside_selection_keeps_pixels(window):
+    ed, canvas, doc = window.editor, window.editor.canvas, window.doc
+    doc.plot([(5, 5)], RED)
+    ed.set_tool(Tool.SELECT)
+    _drag(canvas, (4, 4), (6, 6))
+    QTest.mouseClick(canvas, Qt.MouseButton.LeftButton, pos=_cell_center(canvas, 5, 5))
+    assert doc.pixel((5, 5)) == RED
+
+
+def test_arrow_keys_move_selection_or_whole_frame(window):
+    ed, canvas, doc = window.editor, window.editor.canvas, window.doc
+    doc.plot([(0, 0)], RED)
+    canvas.setFocus()
+    QTest.keyClick(canvas, Qt.Key.Key_Right)
+    assert doc.pixel((1, 0)) == RED
+    QTest.keyClick(canvas, Qt.Key.Key_Left)
+    QTest.keyClick(canvas, Qt.Key.Key_Left)
+    assert doc.pixel((63, 0)) == RED  # whole frame wraps around
+    canvas.set_selection((63, 0, 63, 0))
+    QTest.keyClick(canvas, Qt.Key.Key_Down, Qt.KeyboardModifier.ShiftModifier)
+    assert doc.pixel((63, 4)) == RED and canvas.selection == (63, 4, 63, 4)
+    QTest.keyClick(canvas, Qt.Key.Key_Escape)
+    assert canvas.selection is None
+
+
+def test_move_as_new_frame_builds_an_animation(window):
+    ed, doc = window.editor, window.doc
+    doc.plot([(0, 0)], RED)
+    ed.move_new_frame.setChecked(True)
+    for _ in range(3):
+        ed.nudge(1, 0)
+    assert len(doc.frames) == 4
+    assert [f.image.getpixel((i, 0)) for i, f in enumerate(doc.frames)] == [RED] * 4
+
+
+def test_copy_paste_delete(window):
+    ed, canvas, doc = window.editor, window.editor.canvas, window.doc
+    doc.plot([(1, 1)], RED)
+    canvas.set_selection((0, 0, 2, 2))
+    ed.copy()
+    canvas.set_selection((10, 10, 10, 10))
+    ed.paste()
+    assert doc.pixel((11, 11)) == RED
+    assert canvas.selection == (10, 10, 12, 12)
+    ed.delete()
+    assert doc.pixel((11, 11)) == (0, 0, 0)
+    assert doc.pixel((1, 1)) == RED
+    ed.select_none()
+    ed.cut()
+    assert doc.pixel((1, 1)) == (0, 0, 0)  # no selection: cut takes the whole frame
+    ed.paste()
+    assert doc.pixel((1, 1)) == RED
+
+
 def test_send_buttons_disabled_while_disconnected(window):
     assert not window.editor.send_image.isEnabled()
     assert not window.control_tab.isEnabled()
