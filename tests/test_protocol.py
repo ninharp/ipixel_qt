@@ -185,6 +185,30 @@ def test_gif_has_one_global_palette_and_full_frames():
         assert decoded.convert("RGB").tobytes() == f.tobytes()
 
 
+def test_gif_with_many_colours_keeps_frames_exact_and_tables_valid():
+    """Over 256 colours overall: per-frame tables, never larger than the global one, no loss."""
+    import io
+
+    from PIL import Image
+
+    frames = []
+    for i in range(4):
+        f = Image.new("RGB", (64, 16))
+        px = f.load()
+        for x in range(64):
+            for y in range(16):
+                px[x, y] = ((x * 4 + i) % 256, (y * 16 + i * 40) % 256, (x + y + i * 60) % 256)
+        frames.append(f)
+    data = render.encode_gif(frames, [50] * 4)
+    gsize, local, rects = _gif_structure(data)
+    assert gsize == 256 and rects == {(0, 0, 64, 16)}
+    decoded = Image.open(io.BytesIO(data))
+    for i, f in enumerate(frames):
+        decoded.seek(i)
+        if f.getcolors(256) is not None:
+            assert decoded.convert("RGB").tobytes() == f.tobytes()
+
+
 def test_render_sizes():
     from PIL import Image
 

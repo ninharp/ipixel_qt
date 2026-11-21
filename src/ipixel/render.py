@@ -65,18 +65,12 @@ def encode_gif(frames: list[Image.Image], durations: list[int]) -> bytes:
     for i, f in enumerate(rgb):
         strip.paste(f, (0, i * f.height))
     colours = strip.getcolors(256)
-    if colours is not None:
-        # Few enough colours: keep them exactly.
-        palette_img = Image.new("P", (1, 1))
-        flat = [c for _, rgb_ in colours for c in rgb_]
-        palette_img.putpalette(flat + [0] * (768 - len(flat)))
-        shared = strip.quantize(palette=palette_img, dither=Image.Dither.NONE)
-    else:
-        shared = strip.quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
-    h = rgb[0].height
-    used = max(i for i, n in enumerate(shared.histogram()) if n) + 1
-    palette = bytes(shared.getpalette()[: used * 3])
-    paletted = [shared.crop((0, i * h, shared.width, (i + 1) * h)) for i in range(len(rgb))]
+    if colours is None:
+        return _encode_gif_local_palettes(rgb, durations)
+    # Few enough colours overall: one exact shared palette.
+    table = [c for _, c in colours]
+    palette = bytes(v for c in table for v in c)
+    paletted = [_exact_paletted(f, table) for f in rgb]
     buf = io.BytesIO()
     paletted[0].save(
         buf,
@@ -88,6 +82,43 @@ def encode_gif(frames: list[Image.Image], durations: list[int]) -> bytes:
         disposal=2,
         optimize=False,
         palette=palette,  # one global colour table, no local ones
+    )
+    return buf.getvalue()
+
+
+def _exact_paletted(frame: Image.Image, table: list[tuple[int, int, int]]) -> Image.Image:
+    """Map an RGB frame onto ``table`` exactly (Pillow's own mapping approximates close colours)."""
+    lut = {c: i for i, c in enumerate(table)}
+    raw = frame.tobytes()
+    indices = bytes(lut[(raw[i], raw[i + 1], raw[i + 2])] for i in range(0, len(raw), 3))
+    out = Image.frombytes("P", frame.size, indices)
+    out.putpalette([v for c in table for v in c])
+    return out
+
+
+def _encode_gif_local_palettes(rgb: list[Image.Image], durations: list[int]) -> bytes:
+    """More than 256 colours overall: keep a palette per frame, but a full 256-entry global table
+    so that no local table is larger than the global one (what the panel decodes correctly)."""
+    paletted = []
+    for f in rgb:
+        cols = f.getcolors(256)
+        if cols is None:  # a single frame with >256 colours (e.g. a photo): reduce it
+            f = f.quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert("RGB")
+            cols = f.getcolors(256)
+        q = _exact_paletted(f, [c for _, c in cols])
+        pad = q.getpalette()
+        q.putpalette(pad + [0] * (768 - len(pad)))
+        paletted.append(q)
+    buf = io.BytesIO()
+    paletted[0].save(
+        buf,
+        format="GIF",
+        save_all=True,
+        append_images=paletted[1:],
+        duration=durations,
+        loop=0,
+        disposal=2,
+        optimize=False,
     )
     return buf.getvalue()
 
