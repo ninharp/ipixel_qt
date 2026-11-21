@@ -55,6 +55,7 @@ class IPixel:
         self.password = password
         self.timeout = timeout
         self.info: p.DeviceInfo | None = None
+        self.advert: p.Advert | None = None
         self._client: BleakClient | None = None
         self._notify_uuid = p.NOTIFY_UUID
         self._inbox: asyncio.Queue[bytes] = asyncio.Queue()
@@ -67,6 +68,10 @@ class IPixel:
 
     async def __aexit__(self, *exc) -> None:
         await self.disconnect()
+
+    @property
+    def features(self) -> dict[p.Feature, bool | None]:
+        return p.supported_features(self.info.led_type if self.info else None, self.advert)
 
     @property
     def size(self) -> tuple[int, int]:
@@ -100,10 +105,14 @@ class IPixel:
         # Names are trivially spoofable; only macOS (which hides MACs) falls back to them for a MAC target.
         by_name = not is_mac or sys.platform == "darwin"
         wanted_name = name_for_mac(t) if is_mac else t
-        dev = await BleakScanner.find_device_by_filter(
-            lambda d, _ad: d.address.upper() == t.upper() or (by_name and (d.name or "") == wanted_name),
-            timeout=self.timeout,
-        )
+
+        def match(d: BLEDevice, ad) -> bool:
+            if d.address.upper() == t.upper() or (by_name and (d.name or ad.local_name or "") == wanted_name):
+                self.advert = p.parse_advert(ad.manufacturer_data)
+                return True
+            return False
+
+        dev = await BleakScanner.find_device_by_filter(match, timeout=self.timeout)
         if dev is None:
             raise IPixelError(f"{t} not found")
         if dev.address.upper() != t.upper():

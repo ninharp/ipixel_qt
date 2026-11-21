@@ -78,6 +78,11 @@ text header needs three extra border bytes. The known sizes are the same as in t
 | 0x88 | 192×16 | 0x92 | 384×32 | 0x9b | 320×64 |
 | 0x89 | 48×24 | 0x93 | 448×32 | 0x9c | 384×64 |
 
+Not every panel has every screen. The advertisement carries vendor IDs (manufacturer `0x5254`,
+data `00 72 <cid:2> <pid>`); like the vendor app, the studio greys out countdown, stopwatch and
+scoreboard where that model does not offer them (e.g. the 64×16 panel with cid `0007`, pid `04`
+ignores those commands). `ipixel info` prints the IDs and the resulting features.
+
 Only 64×16 (0x83) has been tested so far. If a panel reports an unknown type, set the size by
 hand in the studio under Edit → Change panel size.
 

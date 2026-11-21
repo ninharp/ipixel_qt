@@ -214,16 +214,33 @@ class ControlTab(QWidget):
     def __init__(self, device: DeviceController, parent: QWidget | None = None):
         super().__init__(parent)
         self.device = device
+        self.feature_boxes: dict[p.Feature, tuple[QGroupBox, str]] = {}
         grid = QGridLayout(self)
         grid.addWidget(self._panel_box(), 0, 0)
         grid.addWidget(self._clock_box(), 0, 1)
-        grid.addWidget(self._timer_box(), 1, 0)
-        grid.addWidget(self._score_box(), 1, 1)
-        grid.addWidget(self._storage_box(), 2, 0)
-        grid.addWidget(self._raw_box(), 2, 1)
-        grid.setRowStretch(3, 1)
+        grid.addWidget(self._countdown_box(), 1, 0)
+        grid.addWidget(self._stopwatch_box(), 1, 1)
+        grid.addWidget(self._score_box(), 2, 0)
+        grid.addWidget(self._storage_box(), 2, 1)
+        grid.addWidget(self._raw_box(), 3, 0, 1, 2)
+        grid.setRowStretch(4, 1)
         device.stateChanged.connect(lambda _s: self.setEnabled(device.connected))
+        device.infoChanged.connect(lambda _i: self.apply_features(device.features))
         self.setEnabled(device.connected)
+
+    def apply_features(self, features: dict[p.Feature, bool | None]) -> None:
+        """Grey out screens the vendor app does not offer for this panel model."""
+        for feature, (box, title) in self.feature_boxes.items():
+            unsupported = features.get(feature) is False
+            box.setEnabled(not unsupported)
+            box.setTitle(tr("{title} (von diesem Panel nicht unterstützt)", title=title) if unsupported else title)
+            box.setToolTip(tr("Die Hersteller-App bietet diese Funktion bei diesem Panelmodell nicht an; "
+                              "das Panel reagiert nicht auf den Befehl.") if unsupported else "")
+
+    def _feature_box(self, feature: p.Feature, title: str) -> QGroupBox:
+        box = QGroupBox(title)
+        self.feature_boxes[feature] = (box, title)
+        return box
 
     def _run(self, label, job) -> None:
         self.device.run(label, job)
@@ -274,8 +291,13 @@ class ControlTab(QWidget):
         lay.addRow(sync)
         return box
 
-    def _timer_box(self) -> QGroupBox:
-        box = QGroupBox(tr("Countdown und Stoppuhr"))
+    @staticmethod
+    def _timer_buttons() -> list[tuple[str, p.TimerAction]]:
+        return [(tr("Start"), p.TimerAction.START), (tr("Pause"), p.TimerAction.PAUSE),
+                (tr("Weiter"), p.TimerAction.RESUME), (tr("Zurücksetzen"), p.TimerAction.RESET)]
+
+    def _countdown_box(self) -> QGroupBox:
+        box = self._feature_box(p.Feature.COUNTDOWN, tr("Countdown"))
         lay = QVBoxLayout(box)
         row = QHBoxLayout()
         mins = QSpinBox()
@@ -285,30 +307,29 @@ class ControlTab(QWidget):
         secs = QSpinBox()
         secs.setRange(0, 59)
         secs.setSuffix(" s")
-        row.addWidget(QLabel(tr("Countdown")))
         row.addWidget(mins)
         row.addWidget(secs)
         lay.addLayout(row)
-        cd = QHBoxLayout()
-        for text, action in [(tr("Start"), p.TimerAction.START), (tr("Pause"), p.TimerAction.PAUSE),
-                             (tr("Weiter"), p.TimerAction.RESUME), (tr("Zurücksetzen"), p.TimerAction.RESET)]:
+        buttons = QHBoxLayout()
+        for text, action in self._timer_buttons():
             b = QPushButton(text)
             b.clicked.connect(lambda _=False, a=action: self._run(
                 tr("Countdown"), lambda px: px.countdown(mins.value(), secs.value(), a)))
-            cd.addWidget(b)
-        lay.addLayout(cd)
-        lay.addWidget(QLabel(tr("Stoppuhr")))
-        sw = QHBoxLayout()
-        for text, action in [(tr("Start"), p.TimerAction.START), (tr("Pause"), p.TimerAction.PAUSE),
-                             (tr("Weiter"), p.TimerAction.RESUME), (tr("Zurücksetzen"), p.TimerAction.RESET)]:
+            buttons.addWidget(b)
+        lay.addLayout(buttons)
+        return box
+
+    def _stopwatch_box(self) -> QGroupBox:
+        box = self._feature_box(p.Feature.STOPWATCH, tr("Stoppuhr"))
+        buttons = QHBoxLayout(box)
+        for text, action in self._timer_buttons():
             b = QPushButton(text)
             b.clicked.connect(lambda _=False, a=action: self._run(tr("Stoppuhr"), lambda px: px.stopwatch(a)))
-            sw.addWidget(b)
-        lay.addLayout(sw)
+            buttons.addWidget(b)
         return box
 
     def _score_box(self) -> QGroupBox:
-        box = QGroupBox(tr("Anzeigetafel"))
+        box = self._feature_box(p.Feature.SCOREBOARD, tr("Anzeigetafel"))
         lay = QGridLayout(box)
         self.left = QSpinBox()
         self.right = QSpinBox()

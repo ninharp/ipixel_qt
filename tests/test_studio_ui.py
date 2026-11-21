@@ -59,6 +59,26 @@ def test_send_buttons_disabled_while_disconnected(window):
     assert not window.control_tab.isEnabled()
 
 
+def test_send_text_queues_upload(window, monkeypatch):
+    jobs = []
+    monkeypatch.setattr(window.device, "run", lambda label, job, keep_live=False: jobs.append(label))
+    window.text_tab.text.setText("Hallo")
+    window.text_tab.send()
+    assert jobs == ["Text „Hallo“ gesendet"]
+
+
+def test_unsupported_features_are_greyed_out(window):
+    from ipixel import protocol as p
+
+    adv = p.Advert("0007", "04", 0x83)
+    window.control_tab.apply_features(p.supported_features(3, adv))
+    tab = window.control_tab
+    box, _ = tab.feature_boxes[p.Feature.SCOREBOARD]
+    assert not box.isEnabledTo(tab) and "nicht unterstützt" in box.title()
+    tab.apply_features(p.supported_features(2, None))
+    assert box.isEnabledTo(tab) and box.title() == "Anzeigetafel"
+
+
 def test_text_preview_renders(window):
     window.text_tab.text.setText("Test")
     assert window.text_tab.preview.pixmap() is not None

@@ -50,6 +50,10 @@ class DeviceController(QObject):
     def info(self) -> p.DeviceInfo | None:
         return self.px.info if self.px else None
 
+    @property
+    def features(self) -> dict[p.Feature, bool | None]:
+        return self.px.features if self.px else p.supported_features(None, None)
+
     # Connection
 
     def scan(self) -> None:
@@ -99,11 +103,12 @@ class DeviceController(QObject):
 
     async def _disconnect(self) -> None:
         self._set_live(False)
-        if self.px:
-            async with self._lock:
-                await self.px.disconnect()
-        self.px = None
+        px, self.px = self.px, None
+        # Leave CONNECTED before the link drops so _lost() does not report an error.
         self._set_state(self.DISCONNECTED)
+        if px:
+            async with self._lock:
+                await px.disconnect()
 
     def _lost(self) -> None:
         if self.state == self.CONNECTED:

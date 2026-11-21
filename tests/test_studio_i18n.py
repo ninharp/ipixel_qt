@@ -38,6 +38,16 @@ def test_placeholders_match_between_languages():
     assert not bad, bad
 
 
+def test_every_placeholder_name_is_accepted():
+    """A placeholder may be called like tr()'s own parameter (regression: {text})."""
+    import string
+
+    for key in i18n.EN:
+        names = {f.split(":")[0] for _, f, _, _ in string.Formatter().parse(key) if f}
+        values = {n: 0 for n in names}
+        i18n.tr(key, **values)
+
+
 def test_tr_switches_language():
     try:
         i18n.set_language("en")

@@ -16,8 +16,8 @@ def language() -> str:
     return _language
 
 
-def tr(text: str, **values: object) -> str:
-    out = EN.get(text, text) if _language == "en" else text
+def tr(source: str, /, **values: object) -> str:
+    out = EN.get(source, source) if _language == "en" else source
     return out.format(**values) if values else out
 
 
@@ -125,7 +125,10 @@ EN: dict[str, str] = {
     "Uhr anzeigen": "Show clock",
     "Uhrzeit vom Rechner stellen": "Set time from this computer",
     "Uhrzeit gestellt": "Time set",
-    "Countdown und Stoppuhr": "Countdown and stopwatch",
+    "{title} (von diesem Panel nicht unterstützt)": "{title} (not supported by this panel)",
+    "Die Hersteller-App bietet diese Funktion bei diesem Panelmodell nicht an; "
+    "das Panel reagiert nicht auf den Befehl.":
+        "The vendor app does not offer this on this panel model; the panel ignores the command.",
     "Countdown": "Countdown",
     "Start": "Start",
     "Pause": "Pause",

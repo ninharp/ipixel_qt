@@ -115,6 +115,23 @@ def test_device_info_mapping(type_byte, size, block):
     assert info.password_required
 
 
+def test_parse_advert_matches_real_panel():
+    # Captured from LED_BLE_1354EDF4 (64x16): manufacturer 0x5254 "TR".
+    adv = p.parse_advert({0x5254: bytes.fromhex("00 72 00 07 04 00 83")})
+    assert (adv.cid, adv.pid, adv.size_byte) == ("0007", "04", 0x83)
+    assert p.parse_advert({0x004C: b"\x02\x15"}) is None
+
+
+def test_features_for_this_panel_type():
+    adv = p.parse_advert({0x5254: bytes.fromhex("00 72 00 07 04 00 83")})
+    f = p.supported_features(3, adv)
+    assert f == {p.Feature.STOPWATCH: False, p.Feature.SCOREBOARD: False, p.Feature.COUNTDOWN: False}
+    newer = p.supported_features(3, p.Advert("0001", "05", 0x83))
+    assert newer[p.Feature.SCOREBOARD] and not newer[p.Feature.COUNTDOWN]
+    assert all(p.supported_features(21, None).values())
+    assert set(p.supported_features(2, None).values()) == {None}
+
+
 def test_parse_ack():
     ack = p.parse_ack(bytes([5, 0, 2, 0, 3]))
     assert ack.cmd == p.Upload.PNG and ack.done

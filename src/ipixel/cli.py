@@ -89,6 +89,9 @@ async def _run(args: argparse.Namespace) -> None:
         match args.cmd:
             case "info":
                 print(f"type 0x{i.type_byte:02x}  size {i.width}x{i.height}  block {i.block_size}  raw {i.raw.hex(' ')}")
+                a = px.advert
+                print(f"advert cid {a.cid} pid {a.pid}" if a else "advert: no vendor data")
+                print("features " + ", ".join(f"{f.value}={'?' if v is None else v}" for f, v in px.features.items()))
             case "on" | "off":
                 await px.power(args.cmd == "on")
             case "clear":

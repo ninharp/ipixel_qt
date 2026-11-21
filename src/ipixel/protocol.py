@@ -11,7 +11,7 @@ import datetime as _dt
 import struct
 import zlib
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import Enum, IntEnum
 
 SERVICE_UUID = "000000fa-0000-1000-8000-00805f9b34fb"
 WRITE_UUID = "0000fa02-0000-1000-8000-00805f9b34fb"
@@ -307,6 +307,46 @@ def pack_bits(pixels: list[list[bool]]) -> bytes:
                     byte |= 1 << bit
             out.append(byte)
     return bytes(out)
+
+
+MANUFACTURER_ID = 0x5254  # "TR"
+
+
+@dataclass(frozen=True)
+class Advert:
+    """Vendor fields from the advertisement, formatted like the app does (cid "0007", pid "04")."""
+
+    cid: str
+    pid: str
+    size_byte: int | None
+
+
+def parse_advert(manufacturer_data: dict[int, bytes]) -> Advert | None:
+    data = manufacturer_data.get(MANUFACTURER_ID)
+    if data is None or len(data) < 5 or data[0] != 0 or data[1] != 0x72:
+        return None
+    cid = ("0000" + str(data[2]) + str(data[3]))[-4:]
+    pid = ("000" + str(data[4]))[-3:] if data[4] >= 100 else ("00" + str(data[4]))[-2:]
+    return Advert(cid, pid, data[6] if len(data) > 6 else None)
+
+
+class Feature(str, Enum):
+    STOPWATCH = "stopwatch"
+    SCOREBOARD = "scoreboard"
+    COUNTDOWN = "countdown"
+
+
+_MECHA_TYPES = {20, 21, 22, 23}
+
+
+def supported_features(led_type: int | None, advert: Advert | None) -> dict[Feature, bool | None]:
+    """Which optional screens the vendor app offers for this panel; None = rule unknown."""
+    if led_type in _MECHA_TYPES:
+        return {f: True for f in Feature}
+    if led_type in (3, 5):
+        new = advert is not None and advert.cid == "0001" and advert.pid in {"04", "05", "28"}
+        return {Feature.STOPWATCH: new, Feature.SCOREBOARD: new, Feature.COUNTDOWN: False}
+    return {f: None for f in Feature}
 
 
 @dataclass(frozen=True)
