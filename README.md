@@ -1,20 +1,20 @@
 # ipixel
 
-Python-Library und CLI für LED-Matrix-Panels der App „iPixel Color“ (`com.wifiled.ipixels`),
-die per BLE als `LED_BLE_xxxxxxxx` werben. Protokoll aus der APK v3.8.1 rekonstruiert.
+Python library and CLI for LED matrix panels made for the "iPixel Color" app (`com.wifiled.ipixels`),
+which advertise over BLE as `LED_BLE_xxxxxxxx`. The protocol was reconstructed from APK v3.8.1.
 
 ```bash
 uv sync
 uv run ipixel scan
-export IPIXEL_DEVICE=50:28:13:54:ED:F4   # MAC, BLE-Adresse oder LED_BLE_-Name
+export IPIXEL_DEVICE=50:28:13:54:ED:F4   # MAC, BLE address or LED_BLE_ name
 uv run ipixel info
 uv run ipixel brightness 40
-uv run ipixel text "Hallo Welt" --color ff8000 --effect scroll_left --speed 60
-uv run ipixel image foto.jpg --fit cover
-uv run ipixel gif katze.gif
-uv run ipixel frame bild.png          # Live-Bild (rohes RGB, nicht gespeichert)
+uv run ipixel text "Hello world" --color ff8000 --effect scroll_left --speed 60
+uv run ipixel image photo.jpg --fit cover
+uv run ipixel gif cat.gif
+uv run ipixel frame picture.png       # live frame (raw RGB, not stored)
 uv run ipixel clock --style 2
-uv run ipixel raw "05000780 01"       # beliebigen Rahmen senden, Antwort ausgeben
+uv run ipixel raw "05000780 01"       # send any frame and print the reply
 ```
 
 ```python
@@ -23,44 +23,46 @@ from ipixel import IPixel, TextEffect
 
 async def main():
     async with IPixel("50:28:13:54:ED:F4") as px:
-        print(px.info)               # Typ, Größe, Blockgröße
+        print(px.info)               # type, size, block size
         await px.brightness(60)
         await px.text("Hi", color=(0, 255, 0), effect=TextEffect.BLINK)
-        await px.image("logo.png", slot=1)   # in Programmplatz 1 speichern
+        await px.image("logo.png", slot=1)   # store in program slot 1
 
 asyncio.run(main())
 ```
 
-## iPixel Studio (Desktop-App)
+## iPixel Studio (desktop app)
 
 ```bash
 uv sync --extra studio
-uv run ipixel-studio        # aus dem Terminal starten, das die Bluetooth-Freigabe hat
+uv run ipixel-studio        # start it from a terminal that has Bluetooth permission
 ```
 
-- **Bild & Animation:** Pixel-Editor in Panelgröße (Stift, Radierer, Linie, Rechteck, Ellipse,
-  Füllen, Pipette, Rechtsklick malt mit Hintergrundfarbe), Bilder mit eigener Dauer, Zwiebelhaut,
-  Vorschau abspielen, Rückgängig. Öffnet PNG/GIF/JPEG, speichert verlustfrei als (A)PNG,
-  exportiert GIF. Senden als Bild (PNG) oder Animation (GIF), nur anzeigen oder auf Platz 1–99.
-  **Live:** jede Änderung und die abgespielte Vorschau sofort aufs Panel.
-- **Text:** Systemschriften, Höhe, Schwelle, Farbe, Hintergrund, Effekt, Tempo, Rastervorschau.
-- **Steuerung:** An/Aus, Drehen, Uhr, Uhrzeit stellen, Countdown, Stoppuhr, Anzeigetafel,
-  Plätze löschen, Rohbefehle mit Antwort.
-- **Bildschirm spiegeln:** Bildschirmbereich (fest oder um den Mauszeiger) live aufs Panel.
+The user interface is in German.
+
+- **Image & animation:** pixel editor at panel size (pen, eraser, line, rectangle, ellipse,
+  fill, eyedropper; right-click paints with the background colour), frames with individual
+  durations, onion skin, preview playback, undo/redo. Opens PNG/GIF/JPEG, saves losslessly as
+  (A)PNG, exports GIF. Sends a single image (PNG) or the animation (GIF), either display-only or
+  stored in slot 1–99. **Live:** every edit and the playing preview appear on the panel at once.
+- **Text:** system fonts, height, threshold, colour, background, effect, speed, raster preview.
+- **Control:** power, rotate 180°, clock, set time, countdown, stopwatch, scoreboard,
+  delete slots, raw commands with their reply.
+- **Screen mirror:** streams a screen region (fixed or around the mouse pointer) live to the panel.
 
 ![Editor](docs/screenshots/editor.png)
 
-| Text | Steuerung | Bildschirm spiegeln |
+| Text | Control | Screen mirror |
 |---|---|---|
-| ![Text](docs/screenshots/text.png) | ![Steuerung](docs/screenshots/steuerung.png) | ![Spiegeln](docs/screenshots/spiegeln.png) |
+| ![Text](docs/screenshots/text.png) | ![Control](docs/screenshots/steuerung.png) | ![Screen mirror](docs/screenshots/spiegeln.png) |
 
-## Andere Panelgrößen
+## Other panel sizes
 
-Library und Studio sind nicht auf 64×16 festgelegt. Beim Verbinden meldet das Panel seinen
-Typ (Byte 4 der Infoantwort), daraus ergeben sich Größe, Blockgröße und ob der Textkopf drei
-zusätzliche Rahmen-Bytes braucht. Bekannt sind dieselben Größen wie in der Handy-App:
+The library and the studio are not tied to 64×16. On connect the panel reports its type
+(byte 4 of the info reply); that determines the size, the upload block size and whether the
+text header needs three extra border bytes. The known sizes are the same as in the phone app:
 
-| Typ | Größe | Typ | Größe | Typ | Größe |
+| Type | Size | Type | Size | Type | Size |
 |---|---|---|---|---|---|
 | 0x80 / 0x00 | 64×64 | 0x8a | 64×32 | 0x94 | 16×16 |
 | 0x81 | 32×32 | 0x8b, 0x8d | 96×32 | 0x95 | 64×64 |
@@ -72,50 +74,51 @@ zusätzliche Rahmen-Bytes braucht. Bekannt sind dieselben Größen wie in der Ha
 | 0x88 | 192×16 | 0x92 | 384×32 | 0x9b | 320×64 |
 | 0x89 | 48×24 | 0x93 | 448×32 | 0x9c | 384×64 |
 
-Getestet ist bisher nur 64×16 (0x83). Meldet ein Panel einen unbekannten Typ, lässt sich die
-Größe im Studio unter „Bearbeiten → Panelgröße ändern“ von Hand setzen.
+Only 64×16 (0x83) has been tested so far. If a panel reports an unknown type, set the size by
+hand in the studio under "Bearbeiten → Panelgröße ändern" (Edit → Change panel size).
 
-Auf macOS ist die MAC nicht sichtbar; eine MAC wird deshalb auch über den Namen
-`LED_BLE_` + letzte vier MAC-Bytes gefunden. Python braucht dort die Bluetooth-Freigabe
-des Terminals.
+macOS does not expose MAC addresses, so on macOS a MAC is also matched by the advertised name
+`LED_BLE_` + the last four MAC bytes (logged as a warning, since names can be spoofed). On other
+platforms a MAC matches the address only. Python needs the terminal's Bluetooth permission on
+macOS.
 
-## Protokoll
+## Protocol
 
-GATT: Service `0x00FA`, Schreiben `0xFA02` (mit Antwort, max. 509 Byte je Write nach
-MTU 512), Antworten per Notify auf der Notify-Characteristic desselben Services.
+GATT: service `0x00FA`, write `0xFA02` (with response, at most 509 bytes per write after
+MTU 512), replies as notifications on the notify characteristic of the same service (`0xFA03`).
 
-Jeder Rahmen: `len:u16le` (inklusive dieser zwei Bytes) · `cmd:2` · Nutzdaten.
+Every frame: `len:u16le` (including these two bytes) · `cmd:2` · payload.
 
-| Befehl | Rahmen |
+| Command | Frame |
 |---|---|
-| An/Aus | `05 00 07 01 <0/1>` |
-| Helligkeit 0–100 | `05 00 04 80 <n>` |
-| Spiegeln | `05 00 06 80 <0/1>` |
-| Info + Uhrzeit setzen | `08 00 01 80 HH MM SS <lang>` → Antwort Byte 4 = Typ (0x80+Index), Byte 10 = Passwort aktiv |
-| Uhr | `0b 00 06 01 <stil> <12h?> <datum?> YY MM DD WD` |
-| Lauftext-Tempo | `05 00 03 01 <n>` |
-| Alles löschen | `04 00 03 80` |
-| Plätze löschen | `len 02 01 <anz:u16le> <plätze…>` |
-| Countdown | `07 00 0d 80 <aktion> <min> <sek>` (0 zurück, 1 Start, 2 Pause, 3 weiter) |
-| Stoppuhr | `05 00 09 80 <aktion>` (wie Countdown) |
-| Anzeigetafel | `08 00 0a 80 <links:u16le> <rechts:u16le>` |
-| Passwort prüfen | `07 00 05 02 <aa> <bb> <cc>` (Ziffernpaare dezimal) |
+| Power | `05 00 07 01 <0/1>` |
+| Brightness 0–100 | `05 00 04 80 <n>` |
+| Rotate 180° | `05 00 06 80 <0/1>` |
+| Info + set time | `08 00 01 80 HH MM SS <lang>` → reply byte 4 = type byte, byte 10 = password enabled |
+| Clock | `0b 00 06 01 <style> <12h?> <date?> YY MM DD WD` |
+| Scrolling text speed | `05 00 03 01 <n>` |
+| Delete everything | `04 00 03 80` |
+| Delete slots | `len 02 01 <count:u16le> <slots…>` |
+| Countdown | `07 00 0d 80 <action> <min> <sec>` (0 reset, 1 start, 2 pause, 3 resume) |
+| Stopwatch | `05 00 09 80 <action>` (same as countdown) |
+| Scoreboard | `08 00 0a 80 <left:u16le> <right:u16le>` |
+| Verify password | `07 00 05 02 <aa> <bb> <cc>` (digit pairs as decimal bytes) |
 
-Uploads (PNG `02 00`, GIF `03 00`, Text `00 01`) werden in Blöcken zu 12 KiB
-(Typ 0x80/0x81) bzw. 4 KiB gesendet:
+Uploads (PNG `02 00`, GIF `03 00`, text `00 01`) are sent in blocks of 12 KiB
+(types 0x00/0x80/0x81) or 4 KiB (all others):
 
-`len:u16le · cmd · opt(0 erster, 2 folgende) · gesamt:u32le · crc32(gesamt):u32le · marker(02 bei GIF, sonst 00) · platz · daten`
+`len:u16le · cmd · opt(0 first, 2 following) · total:u32le · crc32(total):u32le · marker(02 for GIF, else 00) · slot · data`
 
-Platz 1.. speichert als Programm, 101 zeigt nur an. Nach jedem Block quittiert das Panel mit
-`05 00 <cmd> <status>`: 1 = Block ok, 3 = fertig, 0 = CRC-Fehler, 2 = abgelehnt.
+Slot 1.. stores the content as a program, 101 only displays it. After each block the panel
+acknowledges with `05 00 <cmd> <status>`: 1 = block ok, 3 = done, 0 = CRC error, 2 = rejected.
 
-Live-RGB (`00 00`): `len · 00 00 · opt · rahmengröße:u32le · R,G,B…` ohne CRC. Wird nur im
-DIY-Modus angezeigt: vorher `05 00 04 01 01` (betreten, leeren; 3 = ohne Leeren), danach
-`… 02` (verlassen, Bild bleibt) bzw. `… 00` (verlassen, vorheriges Programm). Das Panel
-quittiert Live-Bilder mit Status 1, nicht 3. Als Rahmengröße schickt die App 4096 bzw. 12288,
-nicht die Datenlänge; so funktioniert es am 64×16-Panel.
+Live RGB (`00 00`): `len · 00 00 · opt · frame_size:u32le · R,G,B…` without CRC. It is only
+shown in DIY mode: send `05 00 04 01 01` first (enter and clear; 3 = enter without clearing),
+afterwards `… 02` (leave, keep the image) or `… 00` (leave, back to the previous program). The
+panel acknowledges live frames with status 1, not 3. As frame size the app sends 4096 or 12288
+rather than the data length; that works on the 64×16 panel.
 
-Text-Nutzdaten: 14 Byte Kopf (`anzahl:u16le, h-ausr., v-ausr., effekt, tempo, 1, R,G,B,
-hg?, R,G,B`, bei langen 32/64-Zeilen-Panels + 3 Rahmen-Bytes), dann je Zeichen
-`80 R G B breite höhe` + 1-Bit-Bitmap (Zeilen auf 8 Bit aufgefüllt, LSB zuerst).
-Effekte: 0 fest, 1 links, 2 rechts, 3 hoch, 4 runter, 5 blinken, 6 atmen, 7 Schnee, 8 Laser.
+Text payload: 14-byte header (`count:u16le, h-align, v-align, effect, speed, 1, R,G,B,
+bg?, R,G,B`, plus 3 border bytes on the long 32/64-row panels), then per character
+`80 R G B width height` + a 1-bit bitmap (rows padded to 8 bits, LSB first).
+Effects: 0 fixed, 1 left, 2 right, 3 up, 4 down, 5 blink, 6 breathe, 7 snowflakes, 8 laser.

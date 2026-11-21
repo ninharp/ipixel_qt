@@ -81,7 +81,7 @@ class TextEffect(IntEnum):
     LASER = 8
 
 
-# Index = LED type as reported by the device (0x80 + index), value = (width, height).
+# Index = the app's internal LED type (see _TYPE_BYTE_TO_LED_TYPE), value = (width, height).
 LED_SIZES: list[tuple[int, int]] = [
     (64, 64), (96, 16), (32, 32), (64, 16), (32, 16), (64, 20), (128, 32),
     (144, 16), (192, 16), (48, 24), (64, 32), (96, 32), (128, 32), (96, 32),
