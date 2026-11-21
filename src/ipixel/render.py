@@ -50,15 +50,44 @@ def to_gif(src: ImageSource, width: int, height: int, mode: str = "contain") -> 
     for f in ImageSequence.Iterator(img):
         frames.append(fit(f, width, height, mode))
         durations.append(f.info.get("duration", img.info.get("duration", 100)))
+    return encode_gif(frames, durations)
+
+
+def encode_gif(frames: list[Image.Image], durations: list[int]) -> bytes:
+    """Write an animated GIF the panel can decode: full frames, one shared palette.
+
+    Pillow otherwise gives frames their own (local) colour tables; when one is larger than the
+    global table the panel only shows the frames it can decode (seen with a 4-colour global and
+    8-colour local tables: only the first and last frame appeared).
+    """
+    rgb = [f.convert("RGB") for f in frames]
+    strip = Image.new("RGB", (rgb[0].width, rgb[0].height * len(rgb)))
+    for i, f in enumerate(rgb):
+        strip.paste(f, (0, i * f.height))
+    colours = strip.getcolors(256)
+    if colours is not None:
+        # Few enough colours: keep them exactly.
+        palette_img = Image.new("P", (1, 1))
+        flat = [c for _, rgb_ in colours for c in rgb_]
+        palette_img.putpalette(flat + [0] * (768 - len(flat)))
+        shared = strip.quantize(palette=palette_img, dither=Image.Dither.NONE)
+    else:
+        shared = strip.quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    h = rgb[0].height
+    used = max(i for i, n in enumerate(shared.histogram()) if n) + 1
+    palette = bytes(shared.getpalette()[: used * 3])
+    paletted = [shared.crop((0, i * h, shared.width, (i + 1) * h)) for i in range(len(rgb))]
     buf = io.BytesIO()
-    frames[0].save(
+    paletted[0].save(
         buf,
         format="GIF",
         save_all=True,
-        append_images=frames[1:],
+        append_images=paletted[1:],
         duration=durations,
         loop=0,
         disposal=2,
+        optimize=False,
+        palette=palette,  # one global colour table, no local ones
     )
     return buf.getvalue()
 

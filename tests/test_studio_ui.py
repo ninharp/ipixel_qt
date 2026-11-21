@@ -170,6 +170,21 @@ def test_progress_dialog_follows_upload_and_closes(window):
     assert window._progress is None
 
 
+def test_window_title_shows_opened_gif_name(window, monkeypatch):
+    from pathlib import Path
+
+    from PySide6.QtWidgets import QFileDialog, QInputDialog
+
+    gif = str(Path(__file__).parent.parent / "samples" / "ball.gif")
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **k: (gif, ""))
+    monkeypatch.setattr(QInputDialog, "getItem", lambda *a, **k: (a[3][0], True))
+    window.open_doc()
+    assert window.windowTitle().startswith("ball.gif – 32 Bilder")
+    assert window.path is None  # a GIF is not silently overwritten by Save
+    window.new_doc()
+    assert window.windowTitle().startswith("Unbenannt")
+
+
 def test_send_buttons_disabled_while_disconnected(window):
     assert not window.editor.send_image.isEnabled()
     assert not window.control_tab.isEnabled()

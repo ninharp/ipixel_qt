@@ -139,6 +139,52 @@ def test_parse_ack():
     assert p.parse_ack(b"\x01\x02") is None
 
 
+def _gif_structure(data: bytes):
+    """(global table size, number of local tables, set of frame rectangles)."""
+    pos, flags = 13, data[10]
+    gsize = (2 << (flags & 7)) if flags & 0x80 else 0
+    pos += 3 * gsize
+    local, rects = 0, set()
+    while pos < len(data) and data[pos] != 0x3B:
+        if data[pos] == 0x21:
+            pos += 2
+            while data[pos]:
+                pos += data[pos] + 1
+            pos += 1
+        else:  # 0x2C image descriptor
+            rects.add(struct.unpack("<HHHH", data[pos + 1:pos + 9]))
+            f = data[pos + 9]
+            local += bool(f & 0x80)
+            pos += 10 + (3 * (2 << (f & 7)) if f & 0x80 else 0) + 1
+            while data[pos]:
+                pos += data[pos] + 1
+            pos += 1
+    return gsize, local, rects
+
+
+def test_gif_has_one_global_palette_and_full_frames():
+    """Regression: a 4-colour global + 8-colour local tables made the panel show only 2 frames."""
+    from PIL import Image, ImageDraw
+
+    frames = []
+    for x in range(0, 58, 2):
+        f = Image.new("RGB", (64, 16))
+        d = ImageDraw.Draw(f)
+        for k in range(6):
+            d.rectangle([x - 2 * k, 6, x - 2 * k + 5, 9], fill=(255 >> k, 0, 0))
+        frames.append(f)
+    data = render.encode_gif(frames, [30] * len(frames))
+    gsize, local, rects = _gif_structure(data)
+    assert local == 0 and gsize >= 7
+    assert rects == {(0, 0, 64, 16)}
+    import io
+
+    decoded = Image.open(io.BytesIO(data))
+    for i, f in enumerate(frames):
+        decoded.seek(i)
+        assert decoded.convert("RGB").tobytes() == f.tobytes()
+
+
 def test_render_sizes():
     from PIL import Image
 

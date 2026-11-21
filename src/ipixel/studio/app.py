@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import subprocess
+from pathlib import Path
 import sys
 
 from PIL import Image
@@ -100,7 +101,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.settings = QSettings()
-        self.path: str | None = None
+        self.path: str | None = None  # where Save writes (PNG/APNG only)
+        self.title_name: str | None = None
         self.restart_requested = False
         width = int(self.settings.value("panel/width", 64))
         height = int(self.settings.value("panel/height", 16))
@@ -383,7 +385,7 @@ class MainWindow(QMainWindow):
     # Documents
 
     def _update_title(self) -> None:
-        name = self.path.rsplit("/", 1)[-1] if self.path else tr("Unbenannt")
+        name = self.title_name or tr("Unbenannt")
         n = len(self.doc.frames)
         frames = tr("{count} Bild", count=n) if n == 1 else tr("{count} Bilder", count=n)
         self.setWindowTitle(f"{name} – {frames} – {APP_NAME}")
@@ -395,6 +397,7 @@ class MainWindow(QMainWindow):
         self.doc.frames = Animation(self.doc.width, self.doc.height).frames
         self.doc.index = 0
         self.path = None
+        self.title_name = None
         self.doc.changed()
 
     def open_doc(self) -> None:
@@ -413,6 +416,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, tr("Öffnen"), tr("Datei nicht lesbar:\n{error}", error=e))
             return
         self.path = path if path.lower().endswith(".png") else None
+        self.title_name = Path(path).name
         self._remember_dir(path)
         self._update_title()
 
@@ -433,6 +437,7 @@ class MainWindow(QMainWindow):
                 path += ".png"
         self.doc.save(path)
         self.path = path
+        self.title_name = Path(path).name
         self._remember_dir(path)
         self._update_title()
         self.statusBar().showMessage(tr("Gespeichert: {path}", path=path), 5000)

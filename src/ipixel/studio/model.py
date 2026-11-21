@@ -319,19 +319,7 @@ class Animation:
         return buf.getvalue()
 
     def gif_bytes(self) -> bytes:
-        buf = io.BytesIO()
-        images = [f.image for f in self.frames]
-        images[0].save(
-            buf,
-            format="GIF",
-            save_all=True,
-            append_images=images[1:],
-            duration=[f.duration for f in self.frames],
-            loop=0,
-            disposal=2,
-            optimize=False,
-        )
-        return buf.getvalue()
+        return render.encode_gif([f.image for f in self.frames], [f.duration for f in self.frames])
 
     def rgb_bytes(self, index: int | None = None) -> bytes:
         return self.frames[self.index if index is None else index].image.tobytes()
