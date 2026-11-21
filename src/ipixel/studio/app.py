@@ -234,6 +234,10 @@ class MainWindow(QMainWindow):
         self._action(frames, tr("Bild duplizieren"), "Ctrl+D", lambda: self.doc.add_frame(True))
         self._action(frames, tr("Leeres Bild einfügen"), "Ctrl+Shift+N", lambda: self.doc.add_frame(False))
         self._action(frames, tr("Bild löschen"), "Ctrl+Backspace", self.doc.delete_frame)
+        frames.addSeparator()
+        self._action(frames, tr("Schleife: vor und zurück"), None, self.doc.pingpong)
+        self._action(frames, tr("Schleife: Ende in Anfang überblenden …"), None, self.ask_crossfade)
+        self._action(frames, tr("Reihenfolge umkehren"), None, self.doc.reverse)
 
         panel = mb.addMenu(tr("Panel"))
         self._action(panel, tr("Aktuelles Bild senden"), "Ctrl+Return", self.editor.send_current)
@@ -413,6 +417,19 @@ class MainWindow(QMainWindow):
         if path:
             self.doc.save(path if path.lower().endswith(".gif") else path + ".gif")
             self._remember_dir(path)
+
+    def ask_crossfade(self) -> None:
+        n = len(self.doc.frames)
+        if n < 3:
+            self._error(tr("Für eine Schleife braucht die Animation mindestens 3 Bilder"))
+            return
+        overlap, ok = QInputDialog.getInt(
+            self, tr("Schleife überblenden"),
+            tr("Wie viele Bilder am Ende in den Anfang überblenden?\n"
+               "Die Animation wird um so viele Bilder kürzer."),
+            max(1, min(8, n // 4)), 1, n // 2)
+        if ok:
+            self.doc.crossfade_loop(overlap)
 
     def ask_size(self) -> None:
         text, ok = QInputDialog.getText(self, tr("Panelgröße"), tr("Breite × Höhe:"),

@@ -119,6 +119,40 @@ class Animation:
         self.index = target
         self.changed()
 
+    def reverse(self) -> None:
+        self.checkpoint()
+        self.frames.reverse()
+        self.index = len(self.frames) - 1 - self.index
+        self.changed()
+
+    def pingpong(self) -> None:
+        """Play forward then backward; first and last frame are not repeated, so the turn is smooth."""
+        if len(self.frames) < 3:
+            return
+        self.checkpoint()
+        self.frames += [f.copy() for f in self.frames[-2:0:-1]]
+        self.changed()
+
+    def crossfade_loop(self, overlap: int) -> None:
+        """Blend the last ``overlap`` frames into the first ones so the end flows into the start.
+
+        The result is ``overlap`` frames shorter: it starts at frame ``overlap`` and its blended
+        tail leads straight back into that frame.
+        """
+        n = len(self.frames)
+        overlap = max(1, min(overlap, n // 2))
+        if n < 3:
+            return
+        self.checkpoint()
+        head, middle, tail = self.frames[:overlap], self.frames[overlap:n - overlap], self.frames[n - overlap:]
+        blended = [
+            Frame(Image.blend(t.image, h.image, (k + 1) / (overlap + 1)), t.duration)
+            for k, (t, h) in enumerate(zip(tail, head))
+        ]
+        self.frames = middle + blended
+        self.index = min(self.index, len(self.frames) - 1)
+        self.changed()
+
     def set_duration(self, ms: int, all_frames: bool = False) -> None:
         self.checkpoint()
         for f in self.frames if all_frames else [self.frame]:

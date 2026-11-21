@@ -239,6 +239,15 @@ EN: dict[str, str] = {
     "Vorheriges Bild": "Previous frame",
     "Bild duplizieren": "Duplicate frame",
     "Bild löschen": "Delete frame",
+    "Schleife: vor und zurück": "Loop: forward and back",
+    "Schleife: Ende in Anfang überblenden …": "Loop: blend end into start …",
+    "Reihenfolge umkehren": "Reverse order",
+    "Für eine Schleife braucht die Animation mindestens 3 Bilder": "A loop needs at least 3 frames",
+    "Schleife überblenden": "Blend loop",
+    "Wie viele Bilder am Ende in den Anfang überblenden?\n"
+    "Die Animation wird um so viele Bilder kürzer.":
+        "How many frames at the end should blend into the start?\n"
+        "The animation gets that many frames shorter.",
     "Aktuelles Bild senden": "Send current frame",
     "Live-Modus umschalten": "Toggle live mode",
     "Ansicht": "View",

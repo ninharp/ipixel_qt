@@ -123,6 +123,48 @@ def test_clip_box_normalises_and_clips():
     assert a.clip_box((5, 5, 9, 9)) is None
 
 
+def _numbered(n):
+    """Animation whose frame i is filled with grey level i*10, to track frame order."""
+    a = Animation(2, 1)
+    a.clear((0, 0, 0))
+    for i in range(1, n):
+        a.add_frame(False)
+        a.clear((i * 10,) * 3)
+    return a
+
+
+def _levels(a):
+    return [f.image.getpixel((0, 0))[0] for f in a.frames]
+
+
+def test_pingpong_does_not_repeat_turning_frames():
+    a = _numbered(5)
+    a.pingpong()
+    assert _levels(a) == [0, 10, 20, 30, 40, 30, 20, 10]
+    a.undo()
+    assert len(a.frames) == 5
+
+
+def test_reverse():
+    a = _numbered(4)
+    a.select(0)
+    a.reverse()
+    assert _levels(a) == [30, 20, 10, 0] and a.index == 3
+
+
+def test_crossfade_loop_blends_tail_into_head():
+    a = _numbered(10)  # levels 0..90
+    a.crossfade_loop(3)
+    lv = _levels(a)
+    assert len(lv) == 7
+    assert lv[:4] == [30, 40, 50, 60]  # untouched middle starts at frame 3
+    # tail 70,80,90 blends towards head 0,10,20 with weights 1/4, 2/4, 3/4
+    expected = [70 + (0 - 70) * 0.25, 80 + (10 - 80) * 0.5, 90 + (20 - 90) * 0.75]
+    assert all(abs(got - want) <= 1 for got, want in zip(lv[4:], expected))
+    # wrapping from the last frame back to the first is now a small step, not 90 -> 0
+    assert abs(lv[-1] - lv[0]) < abs(90 - 0)
+
+
 def test_resize_canvas_keeps_pixels():
     a = Animation(4, 4)
     a.plot([(1, 1)], RED)

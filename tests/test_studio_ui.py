@@ -143,6 +143,23 @@ def test_timeline_shows_position_and_total_length(window):
     assert pos.text() == "Bild 1/2 · 0,5 s"
 
 
+def test_loop_menu_entries(window, monkeypatch):
+    from PySide6.QtWidgets import QInputDialog
+
+    doc = window.doc
+    for _ in range(9):
+        doc.add_frame(True)
+    menu = next(a.menu() for a in window.menuBar().actions() if a.text() == "Bilder")
+    acts = {a.text(): a for a in menu.actions()}
+    acts["Schleife: vor und zurück"].trigger()
+    assert len(doc.frames) == 18
+    window.undo_act.trigger()
+    monkeypatch.setattr(QInputDialog, "getInt", lambda *a, **k: (3, True))
+    acts["Schleife: Ende in Anfang überblenden …"].trigger()
+    assert len(doc.frames) == 7
+    assert window.editor.timeline.position.text().startswith("Bild ")
+
+
 def test_send_buttons_disabled_while_disconnected(window):
     assert not window.editor.send_image.isEnabled()
     assert not window.control_tab.isEnabled()
