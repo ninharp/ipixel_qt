@@ -38,7 +38,8 @@ uv sync --extra studio
 uv run ipixel-studio        # start it from a terminal that has Bluetooth permission
 ```
 
-The user interface is in German.
+The user interface is available in English and German. It follows the system language on first
+start and can be switched under View → Language / Sprache (the app offers to restart).
 
 - **Image & animation:** pixel editor at panel size (pen, eraser, line, rectangle, ellipse,
   fill, eyedropper; right-click paints with the background colour), frames with individual
@@ -50,11 +51,14 @@ The user interface is in German.
   delete slots, raw commands with their reply.
 - **Screen mirror:** streams a screen region (fixed or around the mouse pointer) live to the panel.
 
-![Editor](docs/screenshots/editor.png)
+![Editor](docs/screenshots/editor-en.png)
 
 | Text | Control | Screen mirror |
 |---|---|---|
-| ![Text](docs/screenshots/text.png) | ![Control](docs/screenshots/steuerung.png) | ![Screen mirror](docs/screenshots/spiegeln.png) |
+| ![Text](docs/screenshots/text-en.png) | ![Control](docs/screenshots/control-en.png) | ![Screen mirror](docs/screenshots/mirror-en.png) |
+
+German UI: [editor](docs/screenshots/editor.png), [text](docs/screenshots/text.png),
+[control](docs/screenshots/steuerung.png), [screen mirror](docs/screenshots/spiegeln.png).
 
 ## Other panel sizes
 
@@ -75,7 +79,7 @@ text header needs three extra border bytes. The known sizes are the same as in t
 | 0x89 | 48×24 | 0x93 | 448×32 | 0x9c | 384×64 |
 
 Only 64×16 (0x83) has been tested so far. If a panel reports an unknown type, set the size by
-hand in the studio under "Bearbeiten → Panelgröße ändern" (Edit → Change panel size).
+hand in the studio under Edit → Change panel size.
 
 macOS does not expose MAC addresses, so on macOS a MAC is also matched by the advertised name
 `LED_BLE_` + the last four MAC bytes (logged as a warning, since names can be spoofed). On other

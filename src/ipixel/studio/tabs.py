@@ -29,6 +29,7 @@ from .. import protocol as p
 from .. import render
 from .device import DeviceController
 from .editor import color_icon, pil_to_qimage
+from .i18n import tr
 from .model import Color
 
 FONT_DIRS = [
@@ -89,19 +90,19 @@ class TextTab(QWidget):
         self.device = device
         self.panel_height = 16
 
-        self.text = QLineEdit("Hallo Welt")
-        self.color = ColorButton((255, 128, 0), "Textfarbe")
-        self.bg_on = QCheckBox("Hintergrund")
-        self.bg = ColorButton((0, 0, 64), "Hintergrundfarbe")
+        self.text = QLineEdit(tr("Hallo Welt"))
+        self.color = ColorButton((255, 128, 0), tr("Textfarbe"))
+        self.bg_on = QCheckBox(tr("Hintergrund"))
+        self.bg = ColorButton((0, 0, 64), tr("Hintergrundfarbe"))
         self.effect = QComboBox()
         for eff, label in EFFECT_LABELS.items():
-            self.effect.addItem(label, int(eff))
+            self.effect.addItem(tr(label), int(eff))
         self.effect.setCurrentIndex(1)
         self.speed = QSlider(Qt.Orientation.Horizontal)
         self.speed.setRange(1, 100)
         self.speed.setValue(50)
         self.font = QComboBox()
-        self.font.addItem("Standard (Pillow)", None)
+        self.font.addItem(tr("Standard (Pillow)"), None)
         for f in system_fonts():
             self.font.addItem(f.stem, str(f))
         self.height_spin = QSpinBox()
@@ -110,16 +111,16 @@ class TextTab(QWidget):
         self.threshold = QSlider(Qt.Orientation.Horizontal)
         self.threshold.setRange(20, 230)
         self.threshold.setValue(96)
-        self.threshold.setToolTip("Ab welcher Helligkeit ein Pixel der Schrift leuchtet")
+        self.threshold.setToolTip(tr("Ab welcher Helligkeit ein Pixel der Schrift leuchtet"))
         self.slot = QSpinBox()
         self.slot.setRange(0, 99)
-        self.slot.setSpecialValueText("nur anzeigen")
-        self.slot.setPrefix("Platz ")
+        self.slot.setSpecialValueText(tr("nur anzeigen"))
+        self.slot.setPrefix(tr("Platz "))
         self.preview = QLabel()
         self.preview.setMinimumHeight(80)
         self.preview.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.preview.setStyleSheet("background:#111; padding:6px")
-        send = QPushButton("Text senden")
+        send = QPushButton(tr("Text senden"))
         send.clicked.connect(self.send)
         self.send_btn = send
 
@@ -127,19 +128,19 @@ class TextTab(QWidget):
         bg_row.addWidget(self.bg_on)
         bg_row.addWidget(self.bg)
         form = QFormLayout()
-        form.addRow("Text", self.text)
-        form.addRow("Farbe", self.color)
+        form.addRow(tr("Text"), self.text)
+        form.addRow(tr("Farbe"), self.color)
         form.addRow("", bg_row)
-        form.addRow("Effekt", self.effect)
-        form.addRow("Tempo", self.speed)
-        form.addRow("Schrift", self.font)
-        form.addRow("Höhe (Pixel)", self.height_spin)
-        form.addRow("Schwelle", self.threshold)
+        form.addRow(tr("Effekt"), self.effect)
+        form.addRow(tr("Tempo"), self.speed)
+        form.addRow(tr("Schrift"), self.font)
+        form.addRow(tr("Höhe (Pixel)"), self.height_spin)
+        form.addRow(tr("Schwelle"), self.threshold)
         form.addRow("", self.slot)
 
         lay = QVBoxLayout(self)
         lay.addLayout(form)
-        lay.addWidget(QLabel("Vorschau (so werden die Zeichen gerastert):"))
+        lay.addWidget(QLabel(tr("Vorschau (so werden die Zeichen gerastert):")))
         lay.addWidget(self.preview)
         lay.addWidget(send)
         lay.addStretch()
@@ -168,7 +169,7 @@ class TextTab(QWidget):
         try:
             gl = self._glyphs()
         except OSError as e:
-            self.preview.setText(f"Schrift nicht ladbar: {e}")
+            self.preview.setText(tr("Schrift nicht ladbar: {error}", error=e))
             return
         h = self.height_spin.value()
         width = sum(g[0] for g in gl) or 1
@@ -193,7 +194,7 @@ class TextTab(QWidget):
         try:
             gl = self._glyphs()
         except OSError as e:
-            self.device.error.emit(f"Schrift: {e}")
+            self.device.error.emit(tr("Schrift: {error}", error=e))
             return
         info = self.device.info
         border = (0, 0, 0) if info and info.has_border_fields else None
@@ -206,7 +207,7 @@ class TextTab(QWidget):
             border=border,
         )
         slot = self.slot.value() or p.SLOT_TEMPORARY
-        self.device.run(f"Text „{text}“ gesendet", lambda px: px.upload(p.Upload.TEXT, body, slot))
+        self.device.run(tr("Text „{text}“ gesendet", text=text), lambda px: px.upload(p.Upload.TEXT, body, slot))
 
 
 class ControlTab(QWidget):
@@ -228,45 +229,45 @@ class ControlTab(QWidget):
         self.device.run(label, job)
 
     def _panel_box(self) -> QGroupBox:
-        box = QGroupBox("Panel")
+        box = QGroupBox(tr("Panel"))
         lay = QVBoxLayout(box)
         row = QHBoxLayout()
-        on = QPushButton("Einschalten")
-        off = QPushButton("Ausschalten")
-        on.clicked.connect(lambda: self._run("Eingeschaltet", lambda px: px.power(True)))
-        off.clicked.connect(lambda: self._run("Ausgeschaltet", lambda px: px.power(False)))
+        on = QPushButton(tr("Einschalten"))
+        off = QPushButton(tr("Ausschalten"))
+        on.clicked.connect(lambda: self._run(tr("Eingeschaltet"), lambda px: px.power(True)))
+        off.clicked.connect(lambda: self._run(tr("Ausgeschaltet"), lambda px: px.power(False)))
         row.addWidget(on)
         row.addWidget(off)
         lay.addLayout(row)
-        flip = QCheckBox("Auf dem Kopf (180°)")
-        flip.toggled.connect(lambda v: self._run("Ausrichtung", lambda px: px.flip(v)))
+        flip = QCheckBox(tr("Auf dem Kopf (180°)"))
+        flip.toggled.connect(lambda v: self._run(tr("Ausrichtung"), lambda px: px.flip(v)))
         lay.addWidget(flip)
         speed_row = QHBoxLayout()
         speed = QSpinBox()
         speed.setRange(1, 100)
         speed.setValue(50)
-        speed_btn = QPushButton("Lauftext-Tempo setzen")
-        speed_btn.clicked.connect(lambda: self._run("Tempo", lambda px: px.text_speed(speed.value())))
+        speed_btn = QPushButton(tr("Lauftext-Tempo setzen"))
+        speed_btn.clicked.connect(lambda: self._run(tr("Tempo"), lambda px: px.text_speed(speed.value())))
         speed_row.addWidget(speed)
         speed_row.addWidget(speed_btn)
         lay.addLayout(speed_row)
         return box
 
     def _clock_box(self) -> QGroupBox:
-        box = QGroupBox("Uhr")
+        box = QGroupBox(tr("Uhr"))
         lay = QFormLayout(box)
         style = QSpinBox()
         style.setRange(1, 8)
-        h24 = QCheckBox("24 Stunden")
+        h24 = QCheckBox(tr("24 Stunden"))
         h24.setChecked(True)
-        date = QCheckBox("Datum zeigen")
+        date = QCheckBox(tr("Datum zeigen"))
         date.setChecked(True)
-        show = QPushButton("Uhr anzeigen")
+        show = QPushButton(tr("Uhr anzeigen"))
         show.clicked.connect(lambda: self._run(
-            "Uhr", lambda px: px.clock(style.value(), h24.isChecked(), date.isChecked())))
-        sync = QPushButton("Uhrzeit vom Rechner stellen")
-        sync.clicked.connect(lambda: self._run("Uhrzeit gestellt", lambda px: px.query_info()))
-        lay.addRow("Stil", style)
+            tr("Uhr"), lambda px: px.clock(style.value(), h24.isChecked(), date.isChecked())))
+        sync = QPushButton(tr("Uhrzeit vom Rechner stellen"))
+        sync.clicked.connect(lambda: self._run(tr("Uhrzeit gestellt"), lambda px: px.query_info()))
+        lay.addRow(tr("Stil"), style)
         lay.addRow(h24)
         lay.addRow(date)
         lay.addRow(show)
@@ -274,7 +275,7 @@ class ControlTab(QWidget):
         return box
 
     def _timer_box(self) -> QGroupBox:
-        box = QGroupBox("Countdown und Stoppuhr")
+        box = QGroupBox(tr("Countdown und Stoppuhr"))
         lay = QVBoxLayout(box)
         row = QHBoxLayout()
         mins = QSpinBox()
@@ -284,30 +285,30 @@ class ControlTab(QWidget):
         secs = QSpinBox()
         secs.setRange(0, 59)
         secs.setSuffix(" s")
-        row.addWidget(QLabel("Countdown"))
+        row.addWidget(QLabel(tr("Countdown")))
         row.addWidget(mins)
         row.addWidget(secs)
         lay.addLayout(row)
         cd = QHBoxLayout()
-        for text, action in [("Start", p.TimerAction.START), ("Pause", p.TimerAction.PAUSE),
-                             ("Weiter", p.TimerAction.RESUME), ("Zurücksetzen", p.TimerAction.RESET)]:
+        for text, action in [(tr("Start"), p.TimerAction.START), (tr("Pause"), p.TimerAction.PAUSE),
+                             (tr("Weiter"), p.TimerAction.RESUME), (tr("Zurücksetzen"), p.TimerAction.RESET)]:
             b = QPushButton(text)
             b.clicked.connect(lambda _=False, a=action: self._run(
-                "Countdown", lambda px: px.countdown(mins.value(), secs.value(), a)))
+                tr("Countdown"), lambda px: px.countdown(mins.value(), secs.value(), a)))
             cd.addWidget(b)
         lay.addLayout(cd)
-        lay.addWidget(QLabel("Stoppuhr"))
+        lay.addWidget(QLabel(tr("Stoppuhr")))
         sw = QHBoxLayout()
-        for text, action in [("Start", p.TimerAction.START), ("Pause", p.TimerAction.PAUSE),
-                             ("Weiter", p.TimerAction.RESUME), ("Zurücksetzen", p.TimerAction.RESET)]:
+        for text, action in [(tr("Start"), p.TimerAction.START), (tr("Pause"), p.TimerAction.PAUSE),
+                             (tr("Weiter"), p.TimerAction.RESUME), (tr("Zurücksetzen"), p.TimerAction.RESET)]:
             b = QPushButton(text)
-            b.clicked.connect(lambda _=False, a=action: self._run("Stoppuhr", lambda px: px.stopwatch(a)))
+            b.clicked.connect(lambda _=False, a=action: self._run(tr("Stoppuhr"), lambda px: px.stopwatch(a)))
             sw.addWidget(b)
         lay.addLayout(sw)
         return box
 
     def _score_box(self) -> QGroupBox:
-        box = QGroupBox("Anzeigetafel")
+        box = QGroupBox(tr("Anzeigetafel"))
         lay = QGridLayout(box)
         self.left = QSpinBox()
         self.right = QSpinBox()
@@ -321,7 +322,7 @@ class ControlTab(QWidget):
             lay.addWidget(plus, 1, col)
             lay.addWidget(minus, 2, col)
         lay.addWidget(QLabel(":"), 0, 1, Qt.AlignmentFlag.AlignCenter)
-        send = QPushButton("Anzeigen")
+        send = QPushButton(tr("Anzeigen"))
         send.clicked.connect(self._send_score)
         reset = QPushButton("0 : 0")
         reset.clicked.connect(lambda: (self.left.setValue(0), self.right.setValue(0), self._send_score()))
@@ -331,65 +332,65 @@ class ControlTab(QWidget):
 
     def _send_score(self) -> None:
         l, r = self.left.value(), self.right.value()
-        self._run(f"Stand {l}:{r}", lambda px: px.scoreboard(l, r))
+        self._run(tr("Stand {left}:{right}", left=l, right=r), lambda px: px.scoreboard(l, r))
 
     def _storage_box(self) -> QGroupBox:
-        box = QGroupBox("Gespeicherte Programme")
+        box = QGroupBox(tr("Gespeicherte Programme"))
         lay = QVBoxLayout(box)
         row = QHBoxLayout()
         slots = QLineEdit()
-        slots.setPlaceholderText("z. B. 1, 3, 4")
-        delete = QPushButton("Plätze löschen")
+        slots.setPlaceholderText(tr("z. B. 1, 3, 4"))
+        delete = QPushButton(tr("Plätze löschen"))
 
         def delete_slots() -> None:
             try:
                 nums = [int(s) for s in slots.text().replace(";", ",").split(",") if s.strip()]
             except ValueError:
-                self.device.error.emit("Plätze als Zahlen mit Komma angeben")
+                self.device.error.emit(tr("Plätze als Zahlen mit Komma angeben"))
                 return
             if nums:
-                self._run(f"Plätze {nums} gelöscht", lambda px: px.delete_slots(nums))
+                self._run(tr("Plätze {slots} gelöscht", slots=nums), lambda px: px.delete_slots(nums))
 
         delete.clicked.connect(delete_slots)
         row.addWidget(slots)
         row.addWidget(delete)
         lay.addLayout(row)
-        clear = QPushButton("Alle Programme löschen …")
+        clear = QPushButton(tr("Alle Programme löschen …"))
         clear.clicked.connect(self._clear_all)
         lay.addWidget(clear)
         return box
 
     def _clear_all(self) -> None:
         answer = QMessageBox.question(
-            self, "Alles löschen", "Alle auf dem Panel gespeicherten Programme löschen?")
+            self, tr("Alles löschen"), tr("Alle auf dem Panel gespeicherten Programme löschen?"))
         if answer == QMessageBox.StandardButton.Yes:
-            self._run("Alles gelöscht", lambda px: px.clear())
+            self._run(tr("Alles gelöscht"), lambda px: px.clear())
 
     def _raw_box(self) -> QGroupBox:
-        box = QGroupBox("Rohbefehl (für Experimente)")
+        box = QGroupBox(tr("Rohbefehl (für Experimente)"))
         lay = QVBoxLayout(box)
         row = QHBoxLayout()
         raw = QLineEdit()
-        raw.setPlaceholderText("Hex, z. B. 05 00 07 01 01")
+        raw.setPlaceholderText(tr("Hex, z. B. 05 00 07 01 01"))
         result = QLabel()
         result.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        send = QPushButton("Senden")
+        send = QPushButton(tr("Senden"))
 
         def go() -> None:
             try:
                 data = bytes.fromhex(raw.text())
             except ValueError:
-                self.device.error.emit("Ungültiges Hex")
+                self.device.error.emit(tr("Ungültiges Hex"))
                 return
 
             async def job(px):
                 try:
                     reply = await px.request(data, timeout=2.0)
-                    result.setText("Antwort: " + reply.hex(" "))
+                    result.setText(tr("Antwort: {reply}", reply=reply.hex(" ")))
                 except TimeoutError:
-                    result.setText("keine Antwort")
+                    result.setText(tr("keine Antwort"))
 
-            self._run("Rohbefehl", job)
+            self._run(tr("Rohbefehl"), job)
 
         send.clicked.connect(go)
         raw.returnPressed.connect(go)
@@ -414,40 +415,40 @@ class MirrorTab(QWidget):
         for i, s in enumerate(QGuiApplication.screens()):
             g = s.geometry()
             self.screen.addItem(f"{s.name()} ({g.width()}×{g.height()})", i)
-        self.follow = QCheckBox("Bereich folgt der Maus")
+        self.follow = QCheckBox(tr("Bereich folgt der Maus"))
         self.x, self.y, self.w = QSpinBox(), QSpinBox(), QSpinBox()
         for s in (self.x, self.y, self.w):
             s.setRange(0, 10000)
         self.w.setRange(8, 10000)
         self.w.setValue(256)
         self.fit = QComboBox()
-        for key, label in (("cover", "Ausfüllen"), ("contain", "Einpassen"), ("stretch", "Strecken")):
+        for key, label in (("cover", tr("Ausfüllen")), ("contain", tr("Einpassen")), ("stretch", tr("Strecken"))):
             self.fit.addItem(label, key)
         self.fps = QSpinBox()
         self.fps.setRange(1, 20)
         self.fps.setValue(8)
-        self.fps.setSuffix(" Bilder/s")
-        self.start = QPushButton("Spiegeln starten")
+        self.fps.setSuffix(tr(" Bilder/s"))
+        self.start = QPushButton(tr("Spiegeln starten"))
         self.start.setCheckable(True)
         self.start.toggled.connect(self._toggle)
         self.preview = QLabel()
         self.preview.setMinimumHeight(80)
         self.preview.setStyleSheet("background:#111")
-        self.note = QLabel(
+        self.note = QLabel(tr(
             "Höhe ergibt sich aus dem Seitenverhältnis des Panels. Beim ersten Start fragt macOS "
-            "nach der Freigabe „Bildschirmaufnahme“ für dein Terminal.")
+            "nach der Freigabe „Bildschirmaufnahme“ für dein Terminal."))
         self.note.setWordWrap(True)
 
         pos = QHBoxLayout()
-        for label, spin in (("x", self.x), ("y", self.y), ("Breite", self.w)):
+        for label, spin in (("x", self.x), ("y", self.y), (tr("Breite"), self.w)):
             pos.addWidget(QLabel(label))
             pos.addWidget(spin)
         form = QFormLayout()
-        form.addRow("Bildschirm", self.screen)
+        form.addRow(tr("Bildschirm"), self.screen)
         form.addRow(self.follow)
-        form.addRow("Bereich", pos)
-        form.addRow("Skalierung", self.fit)
-        form.addRow("Tempo", self.fps)
+        form.addRow(tr("Bereich"), pos)
+        form.addRow(tr("Skalierung"), self.fit)
+        form.addRow(tr("Tempo"), self.fps)
 
         lay = QVBoxLayout(self)
         lay.addLayout(form)
@@ -461,7 +462,7 @@ class MirrorTab(QWidget):
         self.size = (width, height)
 
     def _toggle(self, on: bool) -> None:
-        self.start.setText("Spiegeln stoppen" if on else "Spiegeln starten")
+        self.start.setText(tr("Spiegeln stoppen") if on else tr("Spiegeln starten"))
         if on:
             self.device.set_live(True)
             if not self.device.live:

@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 
 from .. import protocol as p
 from .device import DeviceController
+from .i18n import tr
 from .model import Animation, Color, Point
 
 PALETTE: list[Color] = [
@@ -50,7 +51,7 @@ class Tool(Enum):
 
     @property
     def label(self) -> str:
-        return self.value[0]
+        return tr(self.value[0])
 
     @property
     def shortcut(self) -> str:
@@ -191,11 +192,11 @@ class Timeline(QWidget):
         self.duration.setSingleStep(10)
         self.duration.setSuffix(" ms")
         self.duration.editingFinished.connect(lambda: self.doc.set_duration(self.duration.value()))
-        all_btn = QPushButton("für alle")
-        all_btn.setToolTip("Diese Dauer für alle Bilder übernehmen")
+        all_btn = QPushButton(tr("für alle"))
+        all_btn.setToolTip(tr("Diese Dauer für alle Bilder übernehmen"))
         all_btn.clicked.connect(lambda: self.doc.set_duration(self.duration.value(), all_frames=True))
 
-        self.play = QPushButton("▶ Abspielen")
+        self.play = QPushButton(tr("▶ Abspielen"))
         self.play.setCheckable(True)
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
@@ -204,18 +205,18 @@ class Timeline(QWidget):
 
         buttons = QHBoxLayout()
         for text, tip, slot in [
-            ("+ Kopie", "Aktuelles Bild duplizieren", lambda: self.doc.add_frame(True)),
-            ("+ Leer", "Leeres Bild einfügen", lambda: self.doc.add_frame(False)),
-            ("Löschen", "Aktuelles Bild löschen", self.doc.delete_frame),
-            ("◀", "Bild nach links verschieben", lambda: self.doc.move_frame(-1)),
-            ("▶", "Bild nach rechts verschieben", lambda: self.doc.move_frame(1)),
+            (tr("+ Kopie"), tr("Aktuelles Bild duplizieren"), lambda: self.doc.add_frame(True)),
+            (tr("+ Leer"), tr("Leeres Bild einfügen"), lambda: self.doc.add_frame(False)),
+            (tr("Löschen"), tr("Aktuelles Bild löschen"), self.doc.delete_frame),
+            ("◀", tr("Bild nach links verschieben"), lambda: self.doc.move_frame(-1)),
+            ("▶", tr("Bild nach rechts verschieben"), lambda: self.doc.move_frame(1)),
         ]:
             b = QPushButton(text)
             b.setToolTip(tip)
             b.clicked.connect(slot)
             buttons.addWidget(b)
         buttons.addSpacing(16)
-        buttons.addWidget(QLabel("Dauer"))
+        buttons.addWidget(QLabel(tr("Dauer")))
         buttons.addWidget(self.duration)
         buttons.addWidget(all_btn)
         buttons.addStretch()
@@ -262,7 +263,7 @@ class Timeline(QWidget):
             self.doc.select(row)
 
     def _toggle_play(self, on: bool) -> None:
-        self.play.setText("■ Stopp" if on else "▶ Abspielen")
+        self.play.setText(tr("■ Stopp") if on else tr("▶ Abspielen"))
         if on:
             self.timer.start(self.doc.frame.duration)
         else:
@@ -309,14 +310,14 @@ class EditorTab(QWidget):
 
         self.pen_size = QSpinBox()
         self.pen_size.setRange(1, 8)
-        self.pen_size.setPrefix("Stärke ")
+        self.pen_size.setPrefix(tr("Stärke "))
         self.pen_size.valueChanged.connect(lambda v: setattr(self.canvas, "pen_size", v))
         tools.addWidget(self.pen_size)
-        grid_cb = QCheckBox("Raster")
+        grid_cb = QCheckBox(tr("Raster"))
         grid_cb.setChecked(True)
         grid_cb.toggled.connect(self._set_grid)
-        onion_cb = QCheckBox("Zwiebelhaut")
-        onion_cb.setToolTip("Vorheriges Bild durchscheinen lassen")
+        onion_cb = QCheckBox(tr("Zwiebelhaut"))
+        onion_cb.setToolTip(tr("Vorheriges Bild durchscheinen lassen"))
         onion_cb.toggled.connect(self._set_onion)
         tools.addWidget(grid_cb)
         tools.addWidget(onion_cb)
@@ -346,10 +347,10 @@ class EditorTab(QWidget):
     # Panels
 
     def _color_box(self) -> QGroupBox:
-        box = QGroupBox("Farbe")
+        box = QGroupBox(tr("Farbe"))
         lay = QVBoxLayout(box)
-        self.fg_btn = QPushButton("Vordergrund")
-        self.bg_btn = QPushButton("Hintergrund / Rechtsklick")
+        self.fg_btn = QPushButton(tr("Vordergrund"))
+        self.bg_btn = QPushButton(tr("Hintergrund / Rechtsklick"))
         self.fg_btn.clicked.connect(lambda: self._choose_color(True))
         self.bg_btn.clicked.connect(lambda: self._choose_color(False))
         lay.addWidget(self.fg_btn)
@@ -359,7 +360,7 @@ class EditorTab(QWidget):
         for i, col in enumerate(PALETTE):
             b = QToolButton()
             b.setIcon(color_icon(col))
-            b.setToolTip("#%02x%02x%02x  (Rechtsklick: Hintergrund)" % col)
+            b.setToolTip(tr("{hex}  (Rechtsklick: Hintergrund)", hex="#%02x%02x%02x" % col))
             b.setFixedSize(26, 26)
             b.clicked.connect(lambda _=False, c=col: self.set_color(c))
             b.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -371,20 +372,20 @@ class EditorTab(QWidget):
         return box
 
     def _send_box(self) -> QGroupBox:
-        box = QGroupBox("Ans Panel")
+        box = QGroupBox(tr("Ans Panel"))
         lay = QVBoxLayout(box)
         self.slot = QSpinBox()
         self.slot.setRange(0, 99)
-        self.slot.setSpecialValueText("nur anzeigen")
-        self.slot.setPrefix("Platz ")
-        self.slot.setToolTip("0 = nur anzeigen, 1–99 = als Programm speichern")
-        self.send_image = QPushButton("Bild senden")
-        self.send_image.setToolTip("Aktuelles Bild als PNG senden")
+        self.slot.setSpecialValueText(tr("nur anzeigen"))
+        self.slot.setPrefix(tr("Platz "))
+        self.slot.setToolTip(tr("0 = nur anzeigen, 1–99 = als Programm speichern"))
+        self.send_image = QPushButton(tr("Bild senden"))
+        self.send_image.setToolTip(tr("Aktuelles Bild als PNG senden"))
         self.send_image.clicked.connect(self.send_current)
-        self.send_anim = QPushButton("Animation senden")
-        self.send_anim.setToolTip("Alle Bilder als GIF senden")
+        self.send_anim = QPushButton(tr("Animation senden"))
+        self.send_anim.setToolTip(tr("Alle Bilder als GIF senden"))
         self.send_anim.clicked.connect(self.send_animation)
-        self.live_cb = QCheckBox("Live: jede Änderung sofort zeigen")
+        self.live_cb = QCheckBox(tr("Live: jede Änderung sofort zeigen"))
         self.live_cb.toggled.connect(self._toggle_live)
         lay.addWidget(self.slot)
         lay.addWidget(self.send_image)
@@ -409,7 +410,7 @@ class EditorTab(QWidget):
 
     def _choose_color(self, foreground: bool) -> None:
         current = self.canvas.color if foreground else self.canvas.background
-        c = QColorDialog.getColor(QColor(*current), self, "Farbe wählen")
+        c = QColorDialog.getColor(QColor(*current), self, tr("Farbe wählen"))
         if c.isValid():
             self.set_color((c.red(), c.green(), c.blue()), foreground)
 
@@ -430,7 +431,7 @@ class EditorTab(QWidget):
 
     def send_current(self) -> None:
         data, slot = self.doc.png_bytes(), self._slot()
-        self.device.run("Bild gesendet", lambda px: px.upload(p.Upload.PNG, data, slot))
+        self.device.run(tr("Bild gesendet"), lambda px: px.upload(p.Upload.PNG, data, slot))
 
     def send_animation(self) -> None:
         if not self.doc.is_animated:
@@ -438,7 +439,7 @@ class EditorTab(QWidget):
             return
         data, slot = self.doc.gif_bytes(), self._slot()
         n = len(self.doc.frames)
-        self.device.run(f"Animation ({n} Bilder) gesendet", lambda px: px.upload(p.Upload.GIF, data, slot))
+        self.device.run(tr("Animation ({count} Bilder) gesendet", count=n), lambda px: px.upload(p.Upload.GIF, data, slot))
 
     def _toggle_live(self, on: bool) -> None:
         self.device.set_live(on)

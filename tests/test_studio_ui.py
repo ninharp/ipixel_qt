@@ -64,6 +64,27 @@ def test_text_preview_renders(window):
     assert window.text_tab.preview.pixmap() is not None
 
 
+def test_english_ui(tmp_path):
+    from ipixel.studio import i18n
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, str(tmp_path))
+    app = QApplication.instance() or QApplication([])
+    app.setOrganizationName("ipixel-tests")
+    app.setApplicationName("studio-test-en")
+    i18n.set_language("en")
+    try:
+        win = MainWindow()
+        assert win.editor.send_image.text() == "Send image"
+        assert win.centralWidget().tabText(2) == "Control"
+        assert win.editor.tool_buttons[Tool.FILL].text() == "Fill"
+        assert win.windowTitle().startswith("Untitled – 1 frame")
+        assert [a.text() for a in win.menuBar().actions()][0] == "File"
+        win.close()
+    finally:
+        i18n.set_language("de")
+
+
 def test_panel_size_applies_everywhere(window):
     window._apply_size(32, 32)
     assert (window.doc.width, window.doc.height) == (32, 32)

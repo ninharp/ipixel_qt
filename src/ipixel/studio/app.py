@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
 
 from PIL import Image
-from PySide6.QtCore import QSettings, Qt
-from PySide6.QtGui import QAction, QCloseEvent, QIcon, QKeySequence, QPixmap
+from PySide6.QtCore import QLocale, QSettings, Qt
+from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QIcon, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -31,6 +32,7 @@ from PySide6.QtWidgets import (
 
 from .device import DeviceController
 from .editor import EditorTab, pil_to_qimage
+from .i18n import LANGUAGES, language, set_language, tr
 from .model import Animation
 from .tabs import ControlTab, MirrorTab, TextTab
 
@@ -97,6 +99,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = QSettings()
         self.path: str | None = None
+        self.restart_requested = False
         width = int(self.settings.value("panel/width", 64))
         height = int(self.settings.value("panel/height", 16))
         self.doc = Animation(width, height)
@@ -113,10 +116,10 @@ class MainWindow(QMainWindow):
         for tab in (self.text_tab, self.mirror_tab):
             tab.set_panel_size(width, height)
         tabs = QTabWidget()
-        tabs.addTab(self.editor, "Bild && Animation")
-        tabs.addTab(self.text_tab, "Text")
-        tabs.addTab(self.control_tab, "Steuerung")
-        tabs.addTab(self.mirror_tab, "Bildschirm spiegeln")
+        tabs.addTab(self.editor, tr("Bild && Animation"))
+        tabs.addTab(self.text_tab, tr("Text"))
+        tabs.addTab(self.control_tab, tr("Steuerung"))
+        tabs.addTab(self.mirror_tab, tr("Bildschirm spiegeln"))
         self.setCentralWidget(tabs)
 
         self._build_toolbar()
@@ -147,28 +150,28 @@ class MainWindow(QMainWindow):
     # UI construction
 
     def _build_toolbar(self) -> None:
-        tb = QToolBar("Verbindung")
+        tb = QToolBar(tr("Verbindung"))
         tb.setMovable(False)
         self.addToolBar(tb)
         self.target = QComboBox()
         self.target.setEditable(True)
         self.target.setMinimumWidth(260)
-        self.target.lineEdit().setPlaceholderText("MAC, Adresse oder LED_BLE_…")
+        self.target.lineEdit().setPlaceholderText(tr("MAC, Adresse oder LED_BLE_…"))
         last = self.settings.value("device/last", "")
         if last:
             self.target.addItem(last)
-        tb.addWidget(QLabel(" Panel "))
+        tb.addWidget(QLabel(tr(" Panel ")))
         tb.addWidget(self.target)
-        self.scan_btn = QPushButton("Suchen")
+        self.scan_btn = QPushButton(tr("Suchen"))
         self.scan_btn.clicked.connect(self.device.scan)
         tb.addWidget(self.scan_btn)
-        self.connect_btn = QPushButton("Verbinden")
+        self.connect_btn = QPushButton(tr("Verbinden"))
         self.connect_btn.clicked.connect(self._toggle_connection)
         tb.addWidget(self.connect_btn)
         self.state_label = QLabel()
         tb.addWidget(self.state_label)
         tb.addSeparator()
-        tb.addWidget(QLabel(" Helligkeit "))
+        tb.addWidget(QLabel(tr(" Helligkeit ")))
         self.brightness = QSlider(Qt.Orientation.Horizontal)
         self.brightness.setRange(1, 100)
         self.brightness.setValue(int(self.settings.value("panel/brightness", 50)))
@@ -189,44 +192,44 @@ class MainWindow(QMainWindow):
 
     def _build_menus(self) -> None:
         mb = self.menuBar()
-        file = mb.addMenu("Datei")
-        self._action(file, "Neu", QKeySequence.StandardKey.New, self.new_doc)
-        self._action(file, "Öffnen …", QKeySequence.StandardKey.Open, self.open_doc)
-        self._action(file, "Bild ins aktuelle Bild einfügen …", "Ctrl+Shift+I", self.import_into_frame)
+        file = mb.addMenu(tr("Datei"))
+        self._action(file, tr("Neu"), QKeySequence.StandardKey.New, self.new_doc)
+        self._action(file, tr("Öffnen …"), QKeySequence.StandardKey.Open, self.open_doc)
+        self._action(file, tr("Bild ins aktuelle Bild einfügen …"), "Ctrl+Shift+I", self.import_into_frame)
         file.addSeparator()
-        self._action(file, "Speichern", QKeySequence.StandardKey.Save, self.save_doc)
-        self._action(file, "Speichern unter …", QKeySequence.StandardKey.SaveAs, lambda: self.save_doc(True))
-        self._action(file, "Als GIF exportieren …", "Ctrl+E", self.export_gif)
+        self._action(file, tr("Speichern"), QKeySequence.StandardKey.Save, self.save_doc)
+        self._action(file, tr("Speichern unter …"), QKeySequence.StandardKey.SaveAs, lambda: self.save_doc(True))
+        self._action(file, tr("Als GIF exportieren …"), "Ctrl+E", self.export_gif)
 
-        edit = mb.addMenu("Bearbeiten")
-        self.undo_act = self._action(edit, "Rückgängig", QKeySequence.StandardKey.Undo, self.doc.undo)
-        self.redo_act = self._action(edit, "Wiederholen", QKeySequence.StandardKey.Redo, self.doc.redo)
+        edit = mb.addMenu(tr("Bearbeiten"))
+        self.undo_act = self._action(edit, tr("Rückgängig"), QKeySequence.StandardKey.Undo, self.doc.undo)
+        self.redo_act = self._action(edit, tr("Wiederholen"), QKeySequence.StandardKey.Redo, self.doc.redo)
         edit.addSeparator()
-        self._action(edit, "Bild leeren", "Delete", lambda: self.doc.clear(self.editor.canvas.background))
-        self._action(edit, "Alle Bilder leeren", None, lambda: self.doc.clear(self.editor.canvas.background, True))
+        self._action(edit, tr("Bild leeren"), "Delete", lambda: self.doc.clear(self.editor.canvas.background))
+        self._action(edit, tr("Alle Bilder leeren"), None, lambda: self.doc.clear(self.editor.canvas.background, True))
         edit.addSeparator()
-        for label, key, args in [("Nach links schieben", "Ctrl+Left", (-1, 0)),
-                                 ("Nach rechts schieben", "Ctrl+Right", (1, 0)),
-                                 ("Nach oben schieben", "Ctrl+Up", (0, -1)),
-                                 ("Nach unten schieben", "Ctrl+Down", (0, 1))]:
+        for label, key, args in [(tr("Nach links schieben"), "Ctrl+Left", (-1, 0)),
+                                 (tr("Nach rechts schieben"), "Ctrl+Right", (1, 0)),
+                                 (tr("Nach oben schieben"), "Ctrl+Up", (0, -1)),
+                                 (tr("Nach unten schieben"), "Ctrl+Down", (0, 1))]:
             self._action(edit, label, key, lambda a=args: self.doc.shift(*a))
         edit.addSeparator()
-        self._action(edit, "Waagerecht spiegeln", "Ctrl+H", lambda: self.doc.flip(True))
-        self._action(edit, "Senkrecht spiegeln", "Ctrl+Shift+H", lambda: self.doc.flip(False))
+        self._action(edit, tr("Waagerecht spiegeln"), "Ctrl+H", lambda: self.doc.flip(True))
+        self._action(edit, tr("Senkrecht spiegeln"), "Ctrl+Shift+H", lambda: self.doc.flip(False))
         edit.addSeparator()
-        self._action(edit, "Panelgröße ändern …", None, self.ask_size)
+        self._action(edit, tr("Panelgröße ändern …"), None, self.ask_size)
 
-        frames = mb.addMenu("Bilder")
-        self._action(frames, "Nächstes Bild", ".", lambda: self.doc.select(self.doc.index + 1))
-        self._action(frames, "Vorheriges Bild", ",", lambda: self.doc.select(self.doc.index - 1))
-        self._action(frames, "Bild duplizieren", "Ctrl+D", lambda: self.doc.add_frame(True))
-        self._action(frames, "Leeres Bild einfügen", "Ctrl+Shift+N", lambda: self.doc.add_frame(False))
-        self._action(frames, "Bild löschen", "Ctrl+Backspace", self.doc.delete_frame)
+        frames = mb.addMenu(tr("Bilder"))
+        self._action(frames, tr("Nächstes Bild"), ".", lambda: self.doc.select(self.doc.index + 1))
+        self._action(frames, tr("Vorheriges Bild"), ",", lambda: self.doc.select(self.doc.index - 1))
+        self._action(frames, tr("Bild duplizieren"), "Ctrl+D", lambda: self.doc.add_frame(True))
+        self._action(frames, tr("Leeres Bild einfügen"), "Ctrl+Shift+N", lambda: self.doc.add_frame(False))
+        self._action(frames, tr("Bild löschen"), "Ctrl+Backspace", self.doc.delete_frame)
 
-        panel = mb.addMenu("Panel")
-        self._action(panel, "Aktuelles Bild senden", "Ctrl+Return", self.editor.send_current)
-        self._action(panel, "Animation senden", "Ctrl+Shift+Return", self.editor.send_animation)
-        self._action(panel, "Live-Modus umschalten", "Ctrl+L",
+        panel = mb.addMenu(tr("Panel"))
+        self._action(panel, tr("Aktuelles Bild senden"), "Ctrl+Return", self.editor.send_current)
+        self._action(panel, tr("Animation senden"), "Ctrl+Shift+Return", self.editor.send_animation)
+        self._action(panel, tr("Live-Modus umschalten"), "Ctrl+L",
                      lambda: self.editor.live_cb.setChecked(not self.editor.live_cb.isChecked()))
 
     def _action(self, menu, text, key, slot) -> QAction:
@@ -242,12 +245,21 @@ class MainWindow(QMainWindow):
         log.setReadOnly(True)
         log.setMaximumBlockCount(2000)
         log.setStyleSheet("font-family: Menlo, monospace; font-size: 11px")
-        dock = QDockWidget("Protokoll", self)
+        dock = QDockWidget(tr("Protokoll"), self)
         dock.setObjectName("log")
         dock.setWidget(log)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
         dock.hide()
-        self.menuBar().addMenu("Ansicht").addAction(dock.toggleViewAction())
+        view = self.menuBar().addMenu(tr("Ansicht"))
+        view.addAction(dock.toggleViewAction())
+        lang_menu = view.addMenu(tr("Sprache / Language"))
+        group = QActionGroup(self)
+        for code, label in LANGUAGES.items():
+            act = QAction(label, self, checkable=True)
+            act.setChecked(code == language())
+            act.triggered.connect(lambda _=False, c=code: self._change_language(c))
+            group.addAction(act)
+            lang_menu.addAction(act)
         handler = LogHandler(log)
         logger = logging.getLogger("ipixel")
         logger.addHandler(handler)
@@ -259,7 +271,7 @@ class MainWindow(QMainWindow):
         if self.device.state == DeviceController.DISCONNECTED:
             target = self._target()
             if not target:
-                self._error("Erst ein Panel suchen oder MAC eintragen")
+                self._error(tr("Erst ein Panel suchen oder MAC eintragen"))
                 return
             self.settings.setValue("device/last", target)
             self.device.connect_to(target, _load_password(target))
@@ -280,8 +292,8 @@ class MainWindow(QMainWindow):
 
     def _state_changed(self, state: str) -> None:
         connected = state == DeviceController.CONNECTED
-        self.state_label.setText(f"  {state}  ")
-        self.connect_btn.setText("Trennen" if state != DeviceController.DISCONNECTED else "Verbinden")
+        self.state_label.setText(f"  {tr(state)}  ")
+        self.connect_btn.setText(tr("Trennen") if state != DeviceController.DISCONNECTED else tr("Verbinden"))
         self.connect_btn.setEnabled(state != DeviceController.CONNECTING)
         self.target.setEnabled(state == DeviceController.DISCONNECTED)
         self.scan_btn.setEnabled(state == DeviceController.DISCONNECTED)
@@ -289,7 +301,7 @@ class MainWindow(QMainWindow):
 
     def _info_changed(self, info) -> None:
         if info.width is None:
-            self._error(f"Unbekannter Paneltyp 0x{info.type_byte:02x}; Größe bitte über Bearbeiten einstellen")
+            self._error(tr("Unbekannter Paneltyp 0x{type:02x}; Größe bitte über Bearbeiten einstellen", type=info.type_byte))
             return
         self._apply_size(info.width, info.height)
 
@@ -305,15 +317,26 @@ class MainWindow(QMainWindow):
     def _send_brightness(self) -> None:
         v = self.brightness.value()
         self.settings.setValue("panel/brightness", v)
-        self.device.run(f"Helligkeit {v} %", lambda px: px.brightness(v), keep_live=True)
+        self.device.run(tr("Helligkeit {value} %", value=v), lambda px: px.brightness(v), keep_live=True)
 
     def _ask_password(self, target: str) -> None:
-        pw, ok = QInputDialog.getText(self, "Passwort", "Das Panel ist geschützt. Passwort (4 oder 6 Ziffern):",
+        pw, ok = QInputDialog.getText(self, tr("Passwort"), tr("Das Panel ist geschützt. Passwort (4 oder 6 Ziffern):"),
                                       QLineEdit.EchoMode.Password)
         if ok and pw:
             if not _store_password(target, pw):
-                self._error("Passwort konnte nicht im Schlüsselbund gespeichert werden; es gilt nur für diese Sitzung")
+                self._error(tr("Passwort konnte nicht im Schlüsselbund gespeichert werden; es gilt nur für diese Sitzung"))
             self.device.connect_to(target, pw)
+
+    def _change_language(self, code: str) -> None:
+        if code == language():
+            return
+        self.settings.setValue("ui/language", code)
+        set_language(code)
+        answer = QMessageBox.question(
+            self, tr("Sprache"), tr("Die Sprache wird nach einem Neustart übernommen. Jetzt neu starten?"))
+        if answer == QMessageBox.StandardButton.Yes:
+            self.restart_requested = True
+            self.close()
 
     def _error(self, text: str) -> None:
         self.statusBar().showMessage(text, 10000)
@@ -322,9 +345,10 @@ class MainWindow(QMainWindow):
     # Documents
 
     def _update_title(self) -> None:
-        name = self.path.rsplit("/", 1)[-1] if self.path else "Unbenannt"
+        name = self.path.rsplit("/", 1)[-1] if self.path else tr("Unbenannt")
         n = len(self.doc.frames)
-        self.setWindowTitle(f"{name} – {n} Bild{'er' if n != 1 else ''} – {APP_NAME}")
+        frames = tr("{count} Bild", count=n) if n == 1 else tr("{count} Bilder", count=n)
+        self.setWindowTitle(f"{name} – {frames} – {APP_NAME}")
         self.undo_act.setEnabled(self.doc.can_undo)
         self.redo_act.setEnabled(self.doc.can_redo)
 
@@ -336,25 +360,26 @@ class MainWindow(QMainWindow):
         self.doc.changed()
 
     def open_doc(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Öffnen", self._dir(), OPEN_FILTER)
+        path, _ = QFileDialog.getOpenFileName(self, tr("Öffnen"), self._dir(), tr(OPEN_FILTER))
         if not path:
             return
-        fit, ok = QInputDialog.getItem(self, "Skalierung", "Wie soll das Bild aufs Panel passen?",
-                                       ["Einpassen", "Ausfüllen (beschneiden)", "Strecken"], 0, False)
+        modes = {tr("Einpassen"): "contain", tr("Ausfüllen (beschneiden)"): "cover", tr("Strecken"): "stretch"}
+        fit, ok = QInputDialog.getItem(self, tr("Skalierung"), tr("Wie soll das Bild aufs Panel passen?"),
+                                       list(modes), 0, False)
         if not ok:
             return
-        mode = {"Einpassen": "contain", "Strecken": "stretch"}.get(fit, "cover")
+        mode = modes[fit]
         try:
             self.doc.load(path, mode)
         except OSError as e:
-            QMessageBox.warning(self, "Öffnen", f"Datei nicht lesbar:\n{e}")
+            QMessageBox.warning(self, tr("Öffnen"), tr("Datei nicht lesbar:\n{error}", error=e))
             return
         self.path = path if path.lower().endswith(".png") else None
         self._remember_dir(path)
         self._update_title()
 
     def import_into_frame(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Bild einfügen", self._dir(), OPEN_FILTER)
+        path, _ = QFileDialog.getOpenFileName(self, tr("Bild einfügen"), self._dir(), tr(OPEN_FILTER))
         if path:
             self.doc.paste_image(Image.open(path), "contain")
             self._remember_dir(path)
@@ -362,8 +387,8 @@ class MainWindow(QMainWindow):
     def save_doc(self, ask: bool = False) -> None:
         path = self.path
         if ask or not path:
-            path, _ = QFileDialog.getSaveFileName(self, "Speichern", self._dir("animation.png"),
-                                                  "PNG/APNG (verlustfrei) (*.png)")
+            path, _ = QFileDialog.getSaveFileName(self, tr("Speichern"), self._dir("animation.png"),
+                                                  tr("PNG/APNG (verlustfrei) (*.png)"))
             if not path:
                 return
             if not path.lower().endswith(".png"):
@@ -372,16 +397,16 @@ class MainWindow(QMainWindow):
         self.path = path
         self._remember_dir(path)
         self._update_title()
-        self.statusBar().showMessage(f"Gespeichert: {path}", 5000)
+        self.statusBar().showMessage(tr("Gespeichert: {path}", path=path), 5000)
 
     def export_gif(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Als GIF exportieren", self._dir("animation.gif"), "GIF (*.gif)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("Als GIF exportieren"), self._dir("animation.gif"), "GIF (*.gif)")
         if path:
             self.doc.save(path if path.lower().endswith(".gif") else path + ".gif")
             self._remember_dir(path)
 
     def ask_size(self) -> None:
-        text, ok = QInputDialog.getText(self, "Panelgröße", "Breite × Höhe:",
+        text, ok = QInputDialog.getText(self, tr("Panelgröße"), tr("Breite × Höhe:"),
                                         text=f"{self.doc.width}x{self.doc.height}")
         if not ok:
             return
@@ -415,6 +440,8 @@ def main() -> None:
     app.setOrganizationName("SAUER Networks")
     app.setOrganizationDomain("sauernetworks.de")
     app.setWindowIcon(app_icon())
+    system = "de" if QLocale.system().name().startswith("de") else "en"
+    set_language(str(QSettings().value("ui/language", system)))
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)
     closing = asyncio.Event()
@@ -423,7 +450,12 @@ def main() -> None:
     win.show()
     with loop:
         loop.run_until_complete(closing.wait())
-        loop.run_until_complete(asyncio.sleep(0.3))
+        # Give the BLE disconnect started in closeEvent time to finish.
+        loop.run_until_complete(asyncio.sleep(1.0))
+    if win.restart_requested:
+        args = sys.argv[1:]
+        entry = ["-m", "ipixel.studio"] if sys.argv[0].endswith("__main__.py") else [sys.argv[0]]
+        os.execv(sys.executable, [sys.executable, *entry, *args])
 
 
 if __name__ == "__main__":
