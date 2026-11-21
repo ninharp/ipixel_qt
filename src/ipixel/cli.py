@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import logging
 import os
+import sys
 
 from . import protocol as p
 from .client import IPixel, scan
@@ -79,6 +80,19 @@ def _parser() -> argparse.ArgumentParser:
     return ap
 
 
+def _progress(what: str):
+    """Live percentage on an interactive terminal; silent when piped."""
+    if not sys.stderr.isatty():
+        return None
+
+    def report(done: int, total: int) -> None:
+        end = "\n" if done >= total else ""
+        sys.stderr.write(f"\rsending {what}: {done * 100 // total:3d} %  ({done // 1024}/{total // 1024} KB){end}")
+        sys.stderr.flush()
+
+    return report
+
+
 async def _run(args: argparse.Namespace) -> None:
     if args.cmd == "scan":
         for d in await scan():
@@ -108,11 +122,12 @@ async def _run(args: argparse.Namespace) -> None:
                 await px.text(
                     args.text, args.color, args.bg, p.TextEffect[args.effect.upper()],
                     args.speed, args.height, args.font, args.slot, args.size, args.spacing,
+                    progress=_progress("text"),
                 )
             case "image":
-                await px.image(args.path, args.slot, args.fit)
+                await px.image(args.path, args.slot, args.fit, progress=_progress("image"))
             case "gif":
-                await px.gif(args.path, args.slot, args.fit)
+                await px.gif(args.path, args.slot, args.fit, progress=_progress("gif"))
             case "frame":
                 await px.frame(args.path, args.fit)
             case "fill":

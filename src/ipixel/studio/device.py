@@ -26,6 +26,7 @@ class DeviceController(QObject):
     busyChanged = Signal(bool)
     liveChanged = Signal(bool)
     passwordNeeded = Signal(str)
+    progress = Signal(str, int, int)  # what, bytes done, bytes total
 
     DISCONNECTED = "getrennt"
     CONNECTING = "verbinde…"
@@ -125,6 +126,20 @@ class DeviceController(QObject):
             self.error.emit(tr("Nicht verbunden"))
             return
         self._spawn(self._run(label, job, keep_live))
+
+    def upload(self, what: str, done_label: str, kind: p.Upload, data: bytes, slot: int) -> None:
+        """Queue an upload that reports its progress via the ``progress`` signal."""
+        def report(done: int, total: int) -> None:
+            self.progress.emit(what, done, total)
+
+        async def job(px: IPixel) -> None:
+            try:
+                await px.upload(kind, data, slot, progress=report)
+            finally:
+                # Always close the progress display, also when the upload failed.
+                self.progress.emit(what, 1, 1)
+
+        self.run(done_label, job)
 
     async def _run(self, label: str, job: Job, keep_live: bool) -> None:
         self._busy_add(1)

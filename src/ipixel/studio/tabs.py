@@ -280,7 +280,7 @@ class TextTab(QWidget):
             border=border,
         )
         slot = self.slot.value() or p.SLOT_TEMPORARY
-        self.device.run(tr("Text „{text}“ gesendet", text=text), lambda px: px.upload(p.Upload.TEXT, body, slot))
+        self.device.upload(tr("Text"), tr("Text „{text}“ gesendet", text=text), p.Upload.TEXT, body, slot)
 
 
 class ControlTab(QWidget):

@@ -160,6 +160,16 @@ def test_loop_menu_entries(window, monkeypatch):
     assert window.editor.timeline.position.text().startswith("Bild ")
 
 
+def test_progress_dialog_follows_upload_and_closes(window):
+    d = window.device
+    d.progress.emit("Animation (36 Bilder)", 2048, 8192)
+    dlg = window._progress
+    assert dlg is not None and dlg.value() == 25
+    assert "2,0 von 8,0 KB" in dlg.labelText()
+    d.progress.emit("Animation (36 Bilder)", 8192, 8192)
+    assert window._progress is None
+
+
 def test_send_buttons_disabled_while_disconnected(window):
     assert not window.editor.send_image.isEnabled()
     assert not window.control_tab.isEnabled()

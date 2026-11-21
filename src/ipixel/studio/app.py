@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QProgressBar,
+    QProgressDialog,
     QPushButton,
     QSizePolicy,
     QSlider,
@@ -142,6 +143,8 @@ class MainWindow(QMainWindow):
         d.error.connect(self._error)
         d.busyChanged.connect(self.busy.setVisible)
         d.passwordNeeded.connect(self._ask_password)
+        self._progress: QProgressDialog | None = None
+        d.progress.connect(self._show_progress)
         self.doc.subscribe(self._update_title)
         self._state_changed(d.state)
         self._update_title()
@@ -339,6 +342,28 @@ class MainWindow(QMainWindow):
             if not _store_password(target, pw):
                 self._error(tr("Passwort konnte nicht im Schlüsselbund gespeichert werden; es gilt nur für diese Sitzung"))
             self.device.connect_to(target, pw)
+
+    def _show_progress(self, what: str, done: int, total: int) -> None:
+        if done >= total:
+            if self._progress is not None:
+                self._progress.close()
+                self._progress.deleteLater()
+                self._progress = None
+            return
+        if self._progress is None:
+            dlg = QProgressDialog(self)
+            dlg.setWindowTitle(APP_NAME)
+            dlg.setCancelButton(None)
+            dlg.setRange(0, 100)
+            dlg.setAutoClose(False)
+            dlg.setAutoReset(False)
+            dlg.setMinimumDuration(500)
+            dlg.setWindowModality(Qt.WindowModality.WindowModal)
+            self._progress = dlg
+        kb = (lambda n: f"{n / 1024:.1f}".replace(".", ",")) if language() == "de" else (lambda n: f"{n / 1024:.1f}")
+        self._progress.setLabelText(tr("Sende {what} ans Panel …\n{done} von {total} KB",
+                                       what=what, done=kb(done), total=kb(total)))
+        self._progress.setValue(int(done * 100 / total))
 
     def _change_language(self, code: str) -> None:
         if code == language():

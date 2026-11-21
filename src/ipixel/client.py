@@ -20,6 +20,8 @@ log = logging.getLogger(__name__)
 
 NAME_PREFIX = "LED_BLE_"
 
+Progress = Callable[[int, int], None]
+
 
 class IPixelError(Exception):
     pass
@@ -158,7 +160,7 @@ class IPixel:
         while not self._inbox.empty():
             self._inbox.get_nowait()
 
-    async def send(self, frame: bytes) -> None:
+    async def send(self, frame: bytes, on_written: Callable[[int], None] | None = None) -> None:
         """Write one frame, split into GATT writes the link can carry."""
         if not self._client or not self._client.is_connected:
             raise IPixelError("not connected")
@@ -166,6 +168,8 @@ class IPixel:
         log.debug("-> %s%s", frame[:24].hex(" "), " ..." if len(frame) > 24 else "")
         for i in range(0, len(frame), step):
             await self._client.write_gatt_char(p.WRITE_UUID, frame[i:i + step], response=True)
+            if on_written:
+                on_written(min(i + step, len(frame)))
 
     async def request(self, frame: bytes, timeout: float = 3.0) -> bytes:
         async with self._lock:
@@ -177,20 +181,35 @@ class IPixel:
         """Also sets the panel clock to the host's local time."""
         return p.parse_device_info(await self.request(p.device_info()))
 
-    async def upload(self, kind: p.Upload, data: bytes, slot: int = p.SLOT_TEMPORARY) -> None:
+    async def upload(
+        self,
+        kind: p.Upload,
+        data: bytes,
+        slot: int = p.SLOT_TEMPORARY,
+        progress: Progress | None = None,
+    ) -> None:
+        """Send data in acknowledged blocks; ``progress(done, total)`` reports bytes written."""
         block_size = self.info.block_size if self.info else p.BLOCK_SIZE_SMALL
         blocks = p.upload_blocks(kind, data, slot, block_size)
+        total = sum(len(b) for b in blocks)
+        done = 0
         async with self._lock:
             for n, block in enumerate(blocks, 1):
-                ack = await self._send_block(kind, block)
+                report = (lambda written, base=done: progress(base + written, total)) if progress else None
+                ack = await self._send_block(kind, block, report)
+                done += len(block)
                 log.debug("block %d/%d ack %s", n, len(blocks), ack.raw.hex(" "))
                 if ack.done:
-                    return
+                    break
+        if progress:
+            progress(total, total)
 
-    async def _send_block(self, kind: p.Upload, block: bytes, attempts: int = 3) -> p.Ack:
+    async def _send_block(
+        self, kind: p.Upload, block: bytes, on_written: Callable[[int], None] | None = None, attempts: int = 3
+    ) -> p.Ack:
         for attempt in range(attempts):
             self._drain()
-            await self.send(block)
+            await self.send(block, on_written)
             try:
                 return await self._wait_ack(kind, 8.0 if attempt == 0 else 2.0)
             except asyncio.TimeoutError:
@@ -255,13 +274,19 @@ class IPixel:
 
     # Content
 
-    async def image(self, src: ImageSource, slot: int = p.SLOT_TEMPORARY, fit: str = "contain") -> None:
+    async def image(
+        self, src: ImageSource, slot: int = p.SLOT_TEMPORARY, fit: str = "contain",
+        progress: Progress | None = None,
+    ) -> None:
         w, h = self.size
-        await self.upload(p.Upload.PNG, render.to_png(src, w, h, fit), slot)
+        await self.upload(p.Upload.PNG, render.to_png(src, w, h, fit), slot, progress)
 
-    async def gif(self, src: ImageSource, slot: int = p.SLOT_TEMPORARY, fit: str = "contain") -> None:
+    async def gif(
+        self, src: ImageSource, slot: int = p.SLOT_TEMPORARY, fit: str = "contain",
+        progress: Progress | None = None,
+    ) -> None:
         w, h = self.size
-        await self.upload(p.Upload.GIF, render.to_gif(src, w, h, fit), slot)
+        await self.upload(p.Upload.GIF, render.to_gif(src, w, h, fit), slot, progress)
 
     async def live(self, mode: p.LiveMode) -> None:
         await self.send(p.diy_mode(mode))
@@ -297,6 +322,7 @@ class IPixel:
         slot: int = p.SLOT_TEMPORARY,
         size: int | None = None,
         spacing: int = 1,
+        progress: Progress | None = None,
     ) -> None:
         w, h = self.size
         glyph_height = height or min(h, 64)
@@ -312,4 +338,4 @@ class IPixel:
             speed=speed,
             border=border,
         )
-        await self.upload(p.Upload.TEXT, body, slot)
+        await self.upload(p.Upload.TEXT, body, slot, progress)

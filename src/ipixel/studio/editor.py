@@ -644,7 +644,7 @@ class EditorTab(QWidget):
 
     def send_current(self) -> None:
         data, slot = self.doc.png_bytes(), self._slot()
-        self.device.run(tr("Bild gesendet"), lambda px: px.upload(p.Upload.PNG, data, slot))
+        self.device.upload(tr("Bild"), tr("Bild gesendet"), p.Upload.PNG, data, slot)
 
     def send_animation(self) -> None:
         if not self.doc.is_animated:
@@ -652,7 +652,8 @@ class EditorTab(QWidget):
             return
         data, slot = self.doc.gif_bytes(), self._slot()
         n = len(self.doc.frames)
-        self.device.run(tr("Animation ({count} Bilder) gesendet", count=n), lambda px: px.upload(p.Upload.GIF, data, slot))
+        self.device.upload(tr("Animation ({count} Bilder)", count=n), tr("Animation ({count} Bilder) gesendet", count=n),
+                           p.Upload.GIF, data, slot)
 
     def _toggle_live(self, on: bool) -> None:
         self.device.set_live(on)

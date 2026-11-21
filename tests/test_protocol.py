@@ -194,12 +194,44 @@ def test_client_text_pages_only_static_effects(effect, glyph_count):
     px.info = p.parse_device_info(bytes([0x0b, 0, 1, 0x80, 0x83, 0, 0, 0, 0, 0, 0]))
     sent = []
 
-    async def fake_upload(kind, data, slot=p.SLOT_TEMPORARY):
+    async def fake_upload(kind, data, slot=p.SLOT_TEMPORARY, progress=None):
         sent.append(data)
 
     px.upload = fake_upload
     asyncio.run(px.text("Hello world", effect=effect))
     assert sent[0][0] | sent[0][1] << 8 == glyph_count
+
+
+def test_upload_reports_byte_progress_per_write():
+    import asyncio
+
+    from ipixel.client import IPixel
+
+    class FakeBle:
+        is_connected = True
+        mtu_size = 512
+        writes = 0
+
+        async def write_gatt_char(self, uuid, data, response):
+            FakeBle.writes += 1
+
+    px = IPixel("LED_BLE_TEST")
+    px.info = p.parse_device_info(bytes([0x0b, 0, 1, 0x80, 0x83, 0, 0, 0, 0, 0, 0]))  # 4 KiB blocks
+    px._client = FakeBle()
+    acks = iter([p.Ack(3, 1, b""), p.Ack(3, 1, b""), p.Ack(3, 3, b"")])
+
+    async def fake_ack(kind, timeout):
+        return next(acks)
+
+    px._wait_ack = fake_ack
+    seen = []
+    data = bytes(10000)
+    asyncio.run(px.upload(p.Upload.GIF, data, progress=lambda done, total: seen.append((done, total))))
+    total = sum(len(b) for b in p.upload_blocks(p.Upload.GIF, data, 101, 4096))
+    assert seen[-1] == (total, total)
+    assert all(t == total for _, t in seen)
+    assert [d for d, _ in seen] == sorted(d for d, _ in seen)
+    assert len(seen) >= FakeBle.writes  # at least one report per GATT write
 
 
 def test_merge_glyphs_keeps_pixels_side_by_side():
