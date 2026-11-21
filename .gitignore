@@ -5,3 +5,4 @@ jadx.log
 __pycache__/
 *.egg-info/
 docs/superpowers/
+.DS_Store
