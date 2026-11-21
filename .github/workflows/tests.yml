@@ -1,0 +1,54 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.11", "3.13"]
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Qt runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install
+        run: uv sync --extra studio
+
+      - name: Tests
+        run: uv run pytest -q
+
+      - name: Build package
+        run: uv build
+
+      - name: CLI starts from the built wheel
+        shell: bash
+        run: |
+          VENV="$RUNNER_TEMP/wheel-venv"
+          uv venv --python ${{ matrix.python }} "$VENV"
+          VIRTUAL_ENV="$VENV" uv pip install "$(ls dist/*.whl)[studio]"
+          if [ "$RUNNER_OS" = "Windows" ]; then BIN="$VENV/Scripts"; else BIN="$VENV/bin"; fi
+          "$BIN/ipixel" --help
+          "$BIN/python" -c "import ipixel.studio.app"

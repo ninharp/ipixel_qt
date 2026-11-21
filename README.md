@@ -1,5 +1,7 @@
 # ipixel
 
+[![tests](https://github.com/ninharp/ipixel_qt/actions/workflows/tests.yml/badge.svg)](https://github.com/ninharp/ipixel_qt/actions/workflows/tests.yml)
+
 Python library, CLI and desktop app (iPixel Studio) for LED matrix panels made for the
 "iPixel Color" app (`com.wifiled.ipixels`), which advertise over BLE as `LED_BLE_xxxxxxxx`.
 The protocol was reconstructed from APK v3.8.1.
@@ -14,7 +16,9 @@ The protocol was reconstructed from APK v3.8.1.
 
 Bluetooth goes through [bleak](https://github.com/hbldh/bleak) (CoreBluetooth, BlueZ, WinRT)
 and the desktop app through Qt (PySide6), both cross-platform. You need a Bluetooth LE adapter
-and Python 3.11 or newer. Reports from Linux and Windows are welcome.
+and Python 3.11 or newer. The test suite (protocol, rendering, editor and the studio UI without
+a screen) runs on Linux, Windows and macOS in CI; Bluetooth itself can only be tested with a
+panel. Reports from Linux and Windows are welcome.
 
 ## Installation
 
