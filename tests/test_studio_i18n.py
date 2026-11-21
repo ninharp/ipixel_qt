@@ -16,7 +16,7 @@ STUDIO = Path(i18n.__file__).parent
 def _tr_literals() -> set[str]:
     found = set()
     for path in STUDIO.glob("*.py"):
-        for node in ast.walk(ast.parse(path.read_text())):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "tr"
                     and node.args and isinstance(node.args[0], ast.Constant)):
                 found.add(node.args[0].value)
