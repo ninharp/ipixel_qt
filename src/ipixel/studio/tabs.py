@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from PIL import Image
@@ -33,11 +34,18 @@ from .i18n import tr
 from .model import Color
 
 FONT_DIRS = [
+    # macOS
     Path("/System/Library/Fonts"),
-    Path("/System/Library/Fonts/Supplemental"),
     Path("/Library/Fonts"),
     Path.home() / "Library/Fonts",
+    # Linux
     Path("/usr/share/fonts"),
+    Path("/usr/local/share/fonts"),
+    Path.home() / ".local/share/fonts",
+    Path.home() / ".fonts",
+    # Windows
+    Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts",
+    Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData/Local"))) / "Microsoft/Windows/Fonts",
 ]
 
 EFFECT_LABELS = {

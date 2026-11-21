@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import subprocess
 import sys
 
 from PIL import Image
@@ -453,9 +454,13 @@ def main() -> None:
         # Give the BLE disconnect started in closeEvent time to finish.
         loop.run_until_complete(asyncio.sleep(1.0))
     if win.restart_requested:
-        args = sys.argv[1:]
-        entry = ["-m", "ipixel.studio"] if sys.argv[0].endswith("__main__.py") else [sys.argv[0]]
-        os.execv(sys.executable, [sys.executable, *entry, *args])
+        # "-m" works on every OS; Windows launchers (ipixel-studio.exe) cannot be re-run as a script.
+        argv = [sys.executable, "-m", "ipixel.studio", *sys.argv[1:]]
+        if os.name == "nt":
+            # execv on Windows mangles arguments containing spaces.
+            subprocess.Popen(argv)
+        else:
+            os.execv(sys.executable, argv)
 
 
 if __name__ == "__main__":

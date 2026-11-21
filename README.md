@@ -1,21 +1,90 @@
 # ipixel
 
-Python library and CLI for LED matrix panels made for the "iPixel Color" app (`com.wifiled.ipixels`),
-which advertise over BLE as `LED_BLE_xxxxxxxx`. The protocol was reconstructed from APK v3.8.1.
+Python library, CLI and desktop app (iPixel Studio) for LED matrix panels made for the
+"iPixel Color" app (`com.wifiled.ipixels`), which advertise over BLE as `LED_BLE_xxxxxxxx`.
+The protocol was reconstructed from APK v3.8.1.
+
+## Platform support
+
+| | macOS | Linux | Windows |
+|---|---|---|---|
+| Library and CLI | tested on a real panel | expected to work, not yet tested | expected to work, not yet tested |
+| iPixel Studio | tested on a real panel | expected to work, not yet tested | expected to work, not yet tested |
+| Screen mirror | works (needs permission) | X11 only (Wayland returns black frames) | expected to work |
+
+Bluetooth goes through [bleak](https://github.com/hbldh/bleak) (CoreBluetooth, BlueZ, WinRT)
+and the desktop app through Qt (PySide6), both cross-platform. You need a Bluetooth LE adapter
+and Python 3.11 or newer. Reports from Linux and Windows are welcome.
+
+## Installation
+
+With [uv](https://docs.astral.sh/uv/) (recommended), this installs the `ipixel` and
+`ipixel-studio` commands:
 
 ```bash
-uv sync
-uv run ipixel scan
-export IPIXEL_DEVICE=50:28:13:54:ED:F4   # MAC, BLE address or LED_BLE_ name
-uv run ipixel info
-uv run ipixel brightness 40
-uv run ipixel text "Hello world" --color ff8000 --effect scroll_left --speed 60
-uv run ipixel image photo.jpg --fit cover
-uv run ipixel gif cat.gif
-uv run ipixel frame picture.png       # live frame (raw RGB, not stored)
-uv run ipixel clock --style 2
-uv run ipixel raw "05000780 01"       # send any frame and print the reply
+uv tool install "ipixel[studio] @ git+https://github.com/ninharp/ipixel_qt"
 ```
+
+Leave out `[studio]` if you only want the library and CLI. With pip, inside a virtual
+environment:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install "ipixel[studio] @ git+https://github.com/ninharp/ipixel_qt"
+```
+
+From a checkout, for development:
+
+```bash
+git clone https://github.com/ninharp/ipixel_qt && cd ipixel_qt
+uv sync --extra studio
+uv run pytest
+uv run ipixel-studio
+```
+
+### macOS
+
+- The terminal (or app) that starts `ipixel` needs Bluetooth permission: System Settings →
+  Privacy & Security → Bluetooth. Without it Python aborts as soon as it touches Bluetooth.
+- macOS hides MAC addresses. A MAC given as target is therefore also matched by the advertised
+  name `LED_BLE_` + last four MAC bytes (logged as a warning, since names can be spoofed).
+- Screen mirror needs Screen Recording permission for the same terminal.
+
+### Linux
+
+- BlueZ must be running (`systemctl status bluetooth`), and your user needs access to it
+  (on most desktops this works out of the box; otherwise add yourself to the `bluetooth` group).
+- Qt needs a few system libraries for its window; on Debian/Ubuntu:
+  `sudo apt install libxcb-cursor0 libegl1`.
+- Panel passwords are kept in the Secret Service keyring (GNOME Keyring, KWallet). Without one
+  the studio asks again each session.
+- Screen mirror only captures on X11.
+
+### Windows
+
+- Windows 10 (1809) or newer with Bluetooth switched on. Do not pair the panel in the Windows
+  settings; the app connects directly.
+- Use the commands in PowerShell or cmd; `ipixel-studio` starts without a console window.
+
+## Command line
+
+```bash
+ipixel scan
+export IPIXEL_DEVICE=50:28:13:54:ED:F4   # MAC, BLE address or LED_BLE_ name (Windows: set IPIXEL_DEVICE=...)
+ipixel info                           # size, type, vendor IDs, supported screens
+ipixel brightness 40
+ipixel text "Hello world" --color ff8000 --effect scroll_left --speed 60
+ipixel image photo.jpg --fit cover
+ipixel gif cat.gif
+ipixel frame picture.png              # live frame (raw RGB, not stored)
+ipixel clock --style 2
+ipixel raw "05000780 01"              # send any frame and print the reply
+```
+
+Add `-v` for progress, `-vv` for every frame sent and received.
+
+## Python API
 
 ```python
 import asyncio
@@ -34,11 +103,10 @@ asyncio.run(main())
 ## iPixel Studio (desktop app)
 
 ```bash
-uv sync --extra studio
-uv run ipixel-studio        # start it from a terminal that has Bluetooth permission
+ipixel-studio
 ```
 
-The user interface is available in English and German. It follows the system language on first
+Enter the panel's MAC (or scan for it) and click Connect. The user interface is available in English and German. It follows the system language on first
 start and can be switched under View → Language / Sprache (the app offers to restart).
 
 - **Image & animation:** pixel editor at panel size (pen, eraser, line, rectangle, ellipse,
@@ -86,11 +154,6 @@ ignores those commands). `ipixel info` prints the IDs and the resulting features
 Only 64×16 (0x83) has been tested so far. If a panel reports an unknown type, set the size by
 hand in the studio under Edit → Change panel size.
 
-macOS does not expose MAC addresses, so on macOS a MAC is also matched by the advertised name
-`LED_BLE_` + the last four MAC bytes (logged as a warning, since names can be spoofed). On other
-platforms a MAC matches the address only. Python needs the terminal's Bluetooth permission on
-macOS.
-
 ## Protocol
 
 GATT: service `0x00FA`, write `0xFA02` (with response, at most 509 bytes per write after
@@ -131,3 +194,12 @@ Text payload: 14-byte header (`count:u16le, h-align, v-align, effect, speed, 1, 
 bg?, R,G,B`, plus 3 border bytes on the long 32/64-row panels), then per character
 `80 R G B width height` + a 1-bit bitmap (rows padded to 8 bits, LSB first).
 Effects: 0 fixed, 1 left, 2 right, 3 up, 4 down, 5 blink, 6 breathe, 7 snowflakes, 8 laser.
+
+## Credits
+
+- The Android app "iPixel Color" 3.8.1 was analysed with the **REA** reverse-engineering
+  toolkit and decompiled with [jadx](https://github.com/skylot/jadx); protocol details were then
+  checked frame by frame against a real 64×16 panel.
+- Library, CLI, iPixel Studio and this documentation were written with the help of
+  **Claude** (Anthropic), using Claude Code.
+- Not affiliated with the makers of the iPixel Color app or the panels.

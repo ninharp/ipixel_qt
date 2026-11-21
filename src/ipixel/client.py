@@ -83,6 +83,7 @@ class IPixel:
         device = await self._find()
         self._client = BleakClient(device, timeout=self.timeout, disconnected_callback=self._on_disconnected)
         await self._client.connect()
+        await self._acquire_mtu()
         self._notify_uuid = self._pick_notify_char()
         await self._client.start_notify(self._notify_uuid, self._on_notify)
         self.info = await self.query_info()
@@ -92,6 +93,17 @@ class IPixel:
                 raise IPixelError("panel is password protected; pass password=")
             await self.verify_password(self.password)
         return self.info
+
+    async def _acquire_mtu(self) -> None:
+        # BlueZ reports the minimum MTU (23) until asked; without this, Linux would write in 20-byte chunks.
+        backend = getattr(self._client, "_backend", None)
+        acquire = getattr(backend, "_acquire_mtu", None)
+        if acquire is None:
+            return
+        try:
+            await acquire()
+        except Exception as e:  # noqa: BLE001 - keep working with small writes
+            log.warning("could not acquire MTU, using small writes: %s", e)
 
     async def disconnect(self) -> None:
         if self._client and self._client.is_connected:
