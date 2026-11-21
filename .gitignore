@@ -1,0 +1,7 @@
+*.apk
+jadx-out/
+jadx.log
+.venv/
+__pycache__/
+*.egg-info/
+docs/superpowers/
