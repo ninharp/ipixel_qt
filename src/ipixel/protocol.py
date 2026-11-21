@@ -26,6 +26,10 @@ BLOCK_SIZE_SMALL = 4096
 
 SLOT_TEMPORARY = 101
 
+# Text speed runs 0 (slow) .. 100 (fast); the vendor app starts at 65-80, which is hectic for
+# blink/breathe on a 64x16 panel.
+DEFAULT_TEXT_SPEED = 30
+
 
 class Upload(IntEnum):
     """Command words for chunked uploads (low byte, high byte)."""
@@ -79,6 +83,11 @@ class TextEffect(IntEnum):
     BREATH = 6
     SNOWFLAKES = 7
     LASER = 8
+
+    @property
+    def scrolls(self) -> bool:
+        """Scrolling effects run the text through; all others show it screen by screen."""
+        return self in (TextEffect.SCROLL_LEFT, TextEffect.SCROLL_RIGHT)
 
 
 # Index = the app's internal LED type (see _TYPE_BYTE_TO_LED_TYPE), value = (width, height).
@@ -269,7 +278,7 @@ def text_payload(
     color: tuple[int, int, int],
     background: tuple[int, int, int] | None = None,
     effect: int = TextEffect.SCROLL_LEFT,
-    speed: int = 50,
+    speed: int = DEFAULT_TEXT_SPEED,
     h_align: int = 0,
     v_align: int = 0,
     border: tuple[int, int, int] | None = None,

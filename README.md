@@ -123,8 +123,9 @@ start and can be switched under View → Language / Sprache (the app offers to r
   (A)PNG, exports GIF. Sends a single image (PNG) or the animation (GIF), either display-only or
   stored in slot 1–99. **Live:** every edit and the playing preview appear on the panel at once.
 - **Text:** system fonts, row height, font size, letter spacing, threshold, colour, background,
-  effect, speed, raster preview. Shows whether the text fits the panel: static effects (fixed,
-  blink, breathe, …) split wider text into screens, the scrolling effects run it through.
+  effect, speed (0 slow … 100 fast, default 30), raster preview. Shows whether the text fits the
+  panel: static effects (fixed, blink, breathe, …) show wider text screen by screen, breaking at
+  spaces; the scrolling effects run it through.
 - **Control:** power, rotate 180°, clock, set time, countdown, stopwatch, scoreboard,
   delete slots, raw commands with their reply.
 - **Screen mirror:** streams a screen region (fixed or around the mouse pointer) live to the panel.
@@ -204,6 +205,13 @@ Text payload: 14-byte header (`count:u16le, h-align, v-align, effect, speed, 1, 
 bg?, R,G,B`, plus 3 border bytes on the long 32/64-row panels), then per character
 `80 R G B width height` + a 1-bit bitmap (rows padded to 8 bits, LSB first).
 Effects: 0 fixed, 1 left, 2 right, 3 up, 4 down, 5 blink, 6 breathe, 7 snowflakes, 8 laser.
+Speed: 0 slow … 100 fast (the vendor app starts at 65–80).
+
+Static effects page the text by **glyph count**, not by pixels: the vendor app sends every Latin
+character as a fixed half-height-wide glyph (8 px at 16 rows), so the 64×16 panel shows 8 glyphs
+per screen however narrow they are. The library therefore merges each screen's characters into a
+single wide glyph (the width byte allows up to 255 px), which fills the screen and keeps the
+effect. Scrolling effects get one glyph per character, like the vendor app.
 
 ## Credits
 

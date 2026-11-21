@@ -291,7 +291,7 @@ class IPixel:
         color: tuple[int, int, int] = (255, 255, 255),
         background: tuple[int, int, int] | None = None,
         effect: int = p.TextEffect.SCROLL_LEFT,
-        speed: int = 50,
+        speed: int = p.DEFAULT_TEXT_SPEED,
         height: int | None = None,
         font: str | Path | None = None,
         slot: int = p.SLOT_TEMPORARY,
@@ -301,8 +301,11 @@ class IPixel:
         w, h = self.size
         glyph_height = height or min(h, 64)
         border = (0, 0, 0) if self.info and self.info.has_border_fields else None
+        gl = render.glyphs(text, glyph_height, color, font, size=size, spacing=spacing)
+        if not p.TextEffect(effect).scrolls:
+            gl = render.page_glyphs(text, gl, w)
         body = p.text_payload(
-            render.glyphs(text, glyph_height, color, font, size=size, spacing=spacing),
+            gl,
             color,
             background,
             effect=effect,

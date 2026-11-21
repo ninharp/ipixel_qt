@@ -49,7 +49,7 @@ def _parser() -> argparse.ArgumentParser:
     t.add_argument("--color", type=_color, default=(255, 255, 255))
     t.add_argument("--bg", type=_color)
     t.add_argument("--effect", choices=[e.name.lower() for e in p.TextEffect], default="scroll_left")
-    t.add_argument("--speed", type=int, default=50)
+    t.add_argument("--speed", type=int, default=p.DEFAULT_TEXT_SPEED, help="0 slow .. 100 fast")
     t.add_argument("--height", type=int, help="glyph rows (default: panel height)")
     t.add_argument("--size", type=int, help="font size in px (default: 3/4 of the height)")
     t.add_argument("--spacing", type=int, default=1, help="empty columns between characters")

@@ -61,9 +61,6 @@ EFFECT_LABELS = {
 }
 
 
-SCROLLING_EFFECTS = {p.TextEffect.SCROLL_LEFT, p.TextEffect.SCROLL_RIGHT}
-
-
 def system_fonts() -> list[Path]:
     found: dict[str, Path] = {}
     for d in FONT_DIRS:
@@ -111,8 +108,8 @@ class TextTab(QWidget):
             self.effect.addItem(tr(label), int(eff))
         self.effect.setCurrentIndex(1)
         self.speed = QSlider(Qt.Orientation.Horizontal)
-        self.speed.setRange(1, 100)
-        self.speed.setValue(50)
+        self.speed.setRange(0, 100)
+        self.speed.setValue(p.DEFAULT_TEXT_SPEED)
         self.font = QComboBox()
         self.font.addItem(tr("Standard (Pillow)"), None)
         for f in system_fonts():
@@ -155,7 +152,16 @@ class TextTab(QWidget):
         form.addRow(tr("Farbe"), self.color)
         form.addRow("", bg_row)
         form.addRow(tr("Effekt"), self.effect)
-        form.addRow(tr("Tempo"), self.speed)
+        speed_row = QHBoxLayout()
+        speed_row.addWidget(QLabel(tr("langsam")))
+        speed_row.addWidget(self.speed, 1)
+        speed_row.addWidget(QLabel(tr("schnell")))
+        self.speed_value = QLabel()
+        self.speed_value.setMinimumWidth(28)
+        self.speed.valueChanged.connect(lambda v: self.speed_value.setText(str(v)))
+        self.speed_value.setText(str(self.speed.value()))
+        speed_row.addWidget(self.speed_value)
+        form.addRow(tr("Tempo"), speed_row)
         form.addRow(tr("Schrift"), self.font)
         form.addRow(tr("Höhe (Pixel)"), self.height_spin)
         form.addRow(tr("Schriftgröße"), self.size_spin)
@@ -196,54 +202,70 @@ class TextTab(QWidget):
             size=self.size_spin.value(),
         )
 
-    def _update_fit(self, gl) -> None:
+    def _scrolls(self) -> bool:
+        return p.TextEffect(self.effect.currentData()).scrolls
+
+    def _send_glyphs(self):
+        """Glyphs as they go to the panel: per character for scrolling, one per screen otherwise."""
+        gl = self._glyphs()
+        if self._scrolls():
+            return gl
+        return render.page_glyphs(self.text.text() or " ", gl, self.panel_width)
+
+    def _update_fit(self, gl, screens: int) -> None:
         width, panel = render.text_width(gl), self.panel_width
         if width <= panel:
             text = tr("{width} von {panel} Pixel – passt auf eine Seite", width=width, panel=panel)
-        elif self.effect.currentData() in SCROLLING_EFFECTS:
+        elif self._scrolls():
             text = tr("{width} von {panel} Pixel – zu breit für eine Seite, läuft als Lauftext durch",
                       width=width, panel=panel)
+        elif screens == 1:
+            text = tr("{width} von {panel} Pixel – passt auf eine Seite", width=width, panel=panel)
         else:
-            text = tr("{width} von {panel} Pixel – zu breit: dieser Effekt zeigt den Text auf {pages} Seiten. "
-                      "Kleinere Schrift, weniger Abstand oder ein Lauf-Effekt helfen.",
-                      width=width, panel=panel, pages=render.pages(gl, panel))
+            text = tr("Zu breit für eine Seite: dieser Effekt zeigt den Text nacheinander auf {pages} Seiten "
+                      "(Umbruch an Leerzeichen, siehe Vorschau). Ein Lauf-Effekt zeigt ihn am Stück.",
+                      pages=screens)
         self.fit_label.setText(text)
 
     def update_preview(self) -> None:
         try:
             gl = self._glyphs()
+            shown = gl if self._scrolls() else self._send_glyphs()
         except OSError as e:
             self.preview.setText(tr("Schrift nicht ladbar: {error}", error=e))
             return
         h = self.height_spin.value()
-        width = sum(g[0] for g in gl) or 1
+        gap = 0 if self._scrolls() else 3
+        width = max(1, sum(g[0] for g in shown) + gap * (len(shown) - 1))
         bg = self.bg.color if self.bg_on.isChecked() else (0, 0, 0)
-        img = Image.new("RGB", (width, h), bg)
+        img = Image.new("RGB", (width, h), (40, 40, 40))
         x = 0
-        for w, gh, bits, rgb in gl:
+        for w, gh, bits, rgb in shown:
+            page_w = self.panel_width if gap else w
+            img.paste(bg, (x, 0, x + min(page_w, w), h))
             row_bytes = (w + 7) // 8
             for y in range(gh):
                 for gx in range(w):
                     if bits[y * row_bytes + gx // 8] >> (gx % 8) & 1:
                         img.putpixel((x + gx, y), rgb)
-            x += w
+            x += w + gap
         scale = max(1, min(6, 600 // max(width, self.panel_width), 72 // h))
         pm = QPixmap.fromImage(pil_to_qimage(img)).scaled(width * scale, h * scale)
-        if width > self.panel_width:
+        if self._scrolls() and width > self.panel_width:
             # Mark where the panel ends.
             qp = QPainter(pm)
             qp.setPen(QPen(QColor(255, 60, 60), 1, Qt.PenStyle.DashLine))
             qp.drawLine(self.panel_width * scale, 0, self.panel_width * scale, h * scale)
             qp.end()
         self.preview.setPixmap(pm)
-        self._update_fit(gl)
+        self._update_fit(gl, len(shown))
 
     def send(self) -> None:
         text = self.text.text()
         if not text:
             return
         try:
-            gl = self._glyphs()
+            gl = self._send_glyphs()
         except OSError as e:
             self.device.error.emit(tr("Schrift: {error}", error=e))
             return
@@ -312,8 +334,9 @@ class ControlTab(QWidget):
         lay.addWidget(flip)
         speed_row = QHBoxLayout()
         speed = QSpinBox()
-        speed.setRange(1, 100)
-        speed.setValue(50)
+        speed.setRange(0, 100)
+        speed.setToolTip(tr("0 = langsam, 100 = schnell"))
+        speed.setValue(p.DEFAULT_TEXT_SPEED)
         speed_btn = QPushButton(tr("Lauftext-Tempo setzen"))
         speed_btn.clicked.connect(lambda: self._run(tr("Tempo"), lambda px: px.text_speed(speed.value())))
         speed_row.addWidget(speed)

@@ -115,11 +115,60 @@ def text_width(glyph_list: list[tuple[int, int, bytes, tuple[int, int, int]]]) -
     return sum(g[0] for g in glyph_list)
 
 
-def pages(glyph_list: list[tuple[int, int, bytes, tuple[int, int, int]]], panel_width: int) -> int:
-    """How many screens a static effect needs; the panel breaks pages between glyphs."""
-    count, used = 1, 0
-    for width, *_ in glyph_list:
-        if used and used + width > panel_width:
-            count, used = count + 1, 0
-        used += width
-    return count
+Glyph = tuple[int, int, bytes, tuple[int, int, int]]
+
+# Glyph records carry their width in one byte.
+MAX_GLYPH_WIDTH = 255
+
+
+def merge_glyphs(glyph_list: list[Glyph]) -> Glyph:
+    """Join glyphs side by side into one wide glyph (colour of the first)."""
+    height = glyph_list[0][1]
+    width = sum(g[0] for g in glyph_list)
+    rows = [[False] * width for _ in range(height)]
+    x = 0
+    for w, h, bits, _ in glyph_list:
+        rb = (w + 7) // 8
+        for y in range(h):
+            for gx in range(w):
+                rows[y][x + gx] = bool(bits[y * rb + gx // 8] >> (gx % 8) & 1)
+        x += w
+    return (width, height, pack_bits(rows), glyph_list[0][3])
+
+
+def page_glyphs(text: str, glyph_list: list[Glyph], panel_width: int) -> list[Glyph]:
+    """Pack text into one glyph per screen for the static text effects.
+
+    The panel pages static text by glyph count (8 per screen on 64×16, sized for the vendor app's
+    fixed half-height glyphs), not by pixel width. One wide glyph per screen fills each screen and
+    keeps effects like blink or breathe. Lines break at spaces where possible.
+    """
+    chars = text.replace("\n", " ")
+    if len(chars) != len(glyph_list):
+        raise ValueError("one glyph per character expected")
+    limit = min(panel_width, MAX_GLYPH_WIDTH)
+    pages: list[list[tuple[str, Glyph]]] = []
+    cur: list[tuple[str, Glyph]] = []
+
+    def width(items) -> int:
+        return sum(g[0] for _, g in items)
+
+    def strip(items):
+        while items and items[0][0] == " ":
+            items = items[1:]
+        while items and items[-1][0] == " ":
+            items = items[:-1]
+        return items
+
+    for item in zip(chars, glyph_list):
+        while cur and width(cur) + item[1][0] > limit:
+            spaces = [i for i, (ch, _) in enumerate(cur) if ch == " "]
+            cut = spaces[-1] if spaces and item[0] != " " else len(cur)
+            pages.append(cur[:cut])
+            cur = strip(cur[cut:])
+        if cur or item[0] != " ":
+            cur.append(item)
+    pages.append(cur)
+    pages = [strip(page) for page in pages]
+    pages = [page for page in pages if page] or [cur or list(zip(chars, glyph_list))[:1]]
+    return [merge_glyphs([g for _, g in page]) for page in pages]

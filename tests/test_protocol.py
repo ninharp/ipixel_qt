@@ -150,11 +150,64 @@ def test_render_sizes():
     assert render.to_png(img, 32, 32)[:8] == b"\x89PNG\r\n\x1a\n"
 
 
-def test_default_text_fits_64_px_panel():
-    """Regression: "Hello world" was 84 px wide at 16 rows and the panel split it into two screens."""
-    gl = render.glyphs("Hello world", 16, (255, 255, 255))
+def _pixels(glyph):
+    w, h, bits, _ = glyph
+    rb = (w + 7) // 8
+    return [[bool(bits[y * rb + x // 8] >> (x % 8) & 1) for x in range(w)] for y in range(h)]
+
+
+def test_static_text_is_one_glyph_per_screen():
+    """Regression: the panel pages static text by glyph count (8 per screen on 64x16), so
+    "Hello world" (11 glyphs) was split although it is only 61 px wide."""
+    text = "Hello world"
+    gl = render.glyphs(text, 16, (255, 255, 255))
     assert render.text_width(gl) <= 64
-    assert render.pages(gl, 64) == 1
+    pages = render.page_glyphs(text, gl, 64)
+    assert len(pages) == 1 and pages[0][0] == render.text_width(gl)
+    assert len(render.page_glyphs("i" * 12, render.glyphs("i" * 12, 16, (1, 1, 1)), 64)) == 1
+
+
+def test_page_glyphs_breaks_at_spaces_and_trims_them():
+    text = "Hello wonderful world"
+    gl = render.glyphs(text, 16, (255, 255, 255))
+    pages = render.page_glyphs(text, gl, 64)
+    assert len(pages) >= 2 and all(pg[0] <= 64 for pg in pages)
+    widths = dict(zip(text, (g[0] for g in gl)))
+    assert pages[0][0] == sum(widths[c] for c in "Hello")  # broke after the word, space dropped
+
+
+def test_page_glyphs_splits_a_word_longer_than_the_panel():
+    text = "Donaudampfschifffahrt"
+    gl = render.glyphs(text, 16, (255, 255, 255))
+    pages = render.page_glyphs(text, gl, 64)
+    assert len(pages) >= 2 and all(pg[0] <= 64 for pg in pages)
+    assert sum(pg[0] for pg in pages) == render.text_width(gl)
+
+
+@pytest.mark.parametrize(("effect", "glyph_count"), [(p.TextEffect.BREATH, 1), (p.TextEffect.SCROLL_LEFT, 11)])
+def test_client_text_pages_only_static_effects(effect, glyph_count):
+    import asyncio
+
+    from ipixel.client import IPixel
+
+    px = IPixel("LED_BLE_TEST")
+    px.info = p.parse_device_info(bytes([0x0b, 0, 1, 0x80, 0x83, 0, 0, 0, 0, 0, 0]))
+    sent = []
+
+    async def fake_upload(kind, data, slot=p.SLOT_TEMPORARY):
+        sent.append(data)
+
+    px.upload = fake_upload
+    asyncio.run(px.text("Hello world", effect=effect))
+    assert sent[0][0] | sent[0][1] << 8 == glyph_count
+
+
+def test_merge_glyphs_keeps_pixels_side_by_side():
+    a = (2, 1, p.pack_bits([[True, False]]), (1, 2, 3))
+    b = (3, 1, p.pack_bits([[False, False, True]]), (9, 9, 9))
+    merged = render.merge_glyphs([a, b])
+    assert merged[0] == 5 and merged[3] == (1, 2, 3)
+    assert _pixels(merged) == [[True, False, False, False, True]]
 
 
 def test_glyphs_are_cropped_with_fixed_spacing():
@@ -165,12 +218,6 @@ def test_glyphs_are_cropped_with_fixed_spacing():
     rb = (w + 7) // 8
     lit_cols = {x for y in range(h) for x in range(w) if bits[y * rb + x // 8] >> (x % 8) & 1}
     assert min(lit_cols) == 0 and max(lit_cols) == w - 1
-
-
-def test_pages_breaks_between_glyphs():
-    g = [(30, 16, b"", (0, 0, 0))] * 3
-    assert render.pages(g, 64) == 2
-    assert render.pages(g[:2], 64) == 1
 
 
 def test_glyphs_have_requested_height_and_packed_length():
