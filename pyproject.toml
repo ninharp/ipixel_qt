@@ -16,6 +16,7 @@ ipixel-studio = "ipixel.studio.app:main"
 
 [project.optional-dependencies]
 studio = [
+    "keyring>=25",
     "pyside6-essentials>=6.8",
     "qasync>=0.27",
 ]

@@ -35,6 +35,7 @@ from .model import Animation
 from .tabs import ControlTab, MirrorTab, TextTab
 
 APP_NAME = "iPixel Studio"
+KEYRING_SERVICE = "iPixel Studio panel password"
 OPEN_FILTER = "Bilder und Animationen (*.png *.gif *.jpg *.jpeg *.bmp *.webp *.apng);;Alle Dateien (*)"
 
 ICON_ART = [
@@ -60,6 +61,25 @@ def app_icon() -> QIcon:
             if ch == "#":
                 img.putpixel((x + 1, y + 2), (255, 60 + 10 * y, 40))
     return QIcon(QPixmap.fromImage(pil_to_qimage(img).scaled(256, 256)))
+
+
+def _load_password(target: str) -> str | None:
+    try:
+        import keyring
+
+        return keyring.get_password(KEYRING_SERVICE, target)
+    except Exception:  # noqa: BLE001 - no usable keychain: fall back to asking
+        return None
+
+
+def _store_password(target: str, password: str) -> bool:
+    try:
+        import keyring
+
+        keyring.set_password(KEYRING_SERVICE, target, password)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
 
 
 class LogHandler(logging.Handler):
@@ -242,7 +262,7 @@ class MainWindow(QMainWindow):
                 self._error("Erst ein Panel suchen oder MAC eintragen")
                 return
             self.settings.setValue("device/last", target)
-            self.device.connect_to(target, self.settings.value(f"password/{target}") or None)
+            self.device.connect_to(target, _load_password(target))
         else:
             self.device.disconnect()
 
@@ -291,7 +311,8 @@ class MainWindow(QMainWindow):
         pw, ok = QInputDialog.getText(self, "Passwort", "Das Panel ist geschützt. Passwort (4 oder 6 Ziffern):",
                                       QLineEdit.EchoMode.Password)
         if ok and pw:
-            self.settings.setValue(f"password/{target}", pw)
+            if not _store_password(target, pw):
+                self._error("Passwort konnte nicht im Schlüsselbund gespeichert werden; es gilt nur für diese Sitzung")
             self.device.connect_to(target, pw)
 
     def _error(self, text: str) -> None:

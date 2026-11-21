@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -95,13 +96,18 @@ class IPixel:
 
     async def _find(self) -> BLEDevice:
         t = self.target
-        wanted_name = name_for_mac(t) if t.count(":") == 5 else t
+        is_mac = t.count(":") == 5
+        # Names are trivially spoofable; only macOS (which hides MACs) falls back to them for a MAC target.
+        by_name = not is_mac or sys.platform == "darwin"
+        wanted_name = name_for_mac(t) if is_mac else t
         dev = await BleakScanner.find_device_by_filter(
-            lambda d, _ad: d.address.upper() == t.upper() or (d.name or "") == wanted_name,
+            lambda d, _ad: d.address.upper() == t.upper() or (by_name and (d.name or "") == wanted_name),
             timeout=self.timeout,
         )
         if dev is None:
             raise IPixelError(f"{t} not found")
+        if dev.address.upper() != t.upper():
+            log.warning("matched %s by advertised name %s only (address %s)", t, dev.name, dev.address)
         return dev
 
     def _pick_notify_char(self) -> str:
