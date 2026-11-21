@@ -130,6 +130,19 @@ def test_copy_paste_delete(window):
     assert doc.pixel((1, 1)) == RED
 
 
+def test_timeline_shows_position_and_total_length(window):
+    doc, pos = window.doc, window.editor.timeline.position
+    assert pos.text() == "Bild 1/1 · 0,1 s"
+    doc.add_frame(True)
+    doc.add_frame(True)
+    doc.set_duration(250, all_frames=True)
+    assert pos.text() == "Bild 3/3 · 0,8 s"
+    doc.select(0)
+    assert pos.text() == "Bild 1/3 · 0,8 s"
+    doc.delete_frame()
+    assert pos.text() == "Bild 1/2 · 0,5 s"
+
+
 def test_send_buttons_disabled_while_disconnected(window):
     assert not window.editor.send_image.isEnabled()
     assert not window.control_tab.isEnabled()

@@ -61,6 +61,9 @@ EN: dict[str, str] = {
     "Bild nach links verschieben": "Move frame left",
     "Bild nach rechts verschieben": "Move frame right",
     "Dauer": "Duration",
+    "Bild {index}/{count} · {seconds} s": "Frame {index}/{count} · {seconds} s",
+    "Aktuelles Bild / Anzahl der Bilder · Gesamtlänge der Animation":
+        "Current frame / number of frames · total length of the animation",
     # Editor side panels
     "Stärke ": "Size ",
     "Raster": "Grid",

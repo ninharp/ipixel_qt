@@ -39,7 +39,7 @@ from PySide6.QtWidgets import (
 
 from .. import protocol as p
 from .device import DeviceController
-from .i18n import tr
+from .i18n import language, tr
 from .model import Animation, Box, Color, Point
 
 PALETTE: list[Color] = [
@@ -302,6 +302,11 @@ class Timeline(QWidget):
             b.clicked.connect(slot)
             buttons.addWidget(b)
         buttons.addSpacing(16)
+        self.position = QLabel()
+        self.position.setMinimumWidth(130)
+        self.position.setToolTip(tr("Aktuelles Bild / Anzahl der Bilder · Gesamtlänge der Animation"))
+        buttons.addWidget(self.position)
+        buttons.addSpacing(8)
         buttons.addWidget(QLabel(tr("Dauer")))
         buttons.addWidget(self.duration)
         buttons.addWidget(all_btn)
@@ -330,7 +335,9 @@ class Timeline(QWidget):
             item.setIcon(QIcon(pm))
             item.setText(f"{i + 1} · {f.duration} ms")
         self.list.setCurrentRow(self.doc.index)
+        self.list.scrollToItem(self.list.item(self.doc.index))
         self.duration.setValue(self.doc.frame.duration)
+        self._update_position()
         self._updating = False
 
     def refresh_current(self) -> None:
@@ -343,6 +350,13 @@ class Timeline(QWidget):
         item.setText(f"{self.doc.index + 1} · {self.doc.frame.duration} ms")
         if not self.duration.hasFocus():
             self.duration.setValue(self.doc.frame.duration)
+        self._update_position()
+
+    def _update_position(self) -> None:
+        seconds = sum(f.duration for f in self.doc.frames) / 1000
+        shown = f"{seconds:.1f}".replace(".", ",") if language() == "de" else f"{seconds:.1f}"
+        self.position.setText(tr("Bild {index}/{count} · {seconds} s", index=self.doc.index + 1,
+                                 count=len(self.doc.frames), seconds=shown))
 
     def _row_changed(self, row: int) -> None:
         if not self._updating and row >= 0 and row != self.doc.index:
