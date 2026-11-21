@@ -105,6 +105,16 @@ EN: dict[str, str] = {
     "Schrift": "Font",
     "Höhe (Pixel)": "Height (pixels)",
     "Schwelle": "Threshold",
+    "Schriftgröße": "Font size",
+    "Zeichenabstand": "Letter spacing",
+    "Kleinere Schrift passt mehr Zeichen aufs Panel": "A smaller font fits more characters on the panel",
+    "{width} von {panel} Pixel – passt auf eine Seite": "{width} of {panel} pixels – fits on one screen",
+    "{width} von {panel} Pixel – zu breit für eine Seite, läuft als Lauftext durch":
+        "{width} of {panel} pixels – too wide for one screen, scrolls through",
+    "{width} von {panel} Pixel – zu breit: dieser Effekt zeigt den Text auf {pages} Seiten. "
+    "Kleinere Schrift, weniger Abstand oder ein Lauf-Effekt helfen.":
+        "{width} of {panel} pixels – too wide: this effect shows the text on {pages} screens. "
+        "A smaller font, less spacing or a scrolling effect helps.",
     "Vorschau (so werden die Zeichen gerastert):": "Preview (how the characters are rasterised):",
     "Schrift nicht ladbar: {error}": "Cannot load font: {error}",
     "Schrift: {error}": "Font: {error}",

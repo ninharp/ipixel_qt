@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QPixmap
+from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -61,6 +61,9 @@ EFFECT_LABELS = {
 }
 
 
+SCROLLING_EFFECTS = {p.TextEffect.SCROLL_LEFT, p.TextEffect.SCROLL_RIGHT}
+
+
 def system_fonts() -> list[Path]:
     found: dict[str, Path] = {}
     for d in FONT_DIRS:
@@ -96,6 +99,7 @@ class TextTab(QWidget):
     def __init__(self, device: DeviceController, parent: QWidget | None = None):
         super().__init__(parent)
         self.device = device
+        self.panel_width = 64
         self.panel_height = 16
 
         self.text = QLineEdit(tr("Hallo Welt"))
@@ -116,6 +120,17 @@ class TextTab(QWidget):
         self.height_spin = QSpinBox()
         self.height_spin.setRange(6, 64)
         self.height_spin.setValue(self.panel_height)
+        self.size_spin = QSpinBox()
+        self.size_spin.setRange(5, 80)
+        self.size_spin.setValue(render.default_font_size(self.panel_height))
+        self.size_spin.setToolTip(tr("Kleinere Schrift passt mehr Zeichen aufs Panel"))
+        self.height_spin.valueChanged.connect(lambda h: self.size_spin.setValue(render.default_font_size(h)))
+        self.spacing_spin = QSpinBox()
+        self.spacing_spin.setRange(0, 6)
+        self.spacing_spin.setValue(1)
+        self.spacing_spin.setSuffix(" px")
+        self.fit_label = QLabel()
+        self.fit_label.setWordWrap(True)
         self.threshold = QSlider(Qt.Orientation.Horizontal)
         self.threshold.setRange(20, 230)
         self.threshold.setValue(96)
@@ -143,6 +158,8 @@ class TextTab(QWidget):
         form.addRow(tr("Tempo"), self.speed)
         form.addRow(tr("Schrift"), self.font)
         form.addRow(tr("Höhe (Pixel)"), self.height_spin)
+        form.addRow(tr("Schriftgröße"), self.size_spin)
+        form.addRow(tr("Zeichenabstand"), self.spacing_spin)
         form.addRow(tr("Schwelle"), self.threshold)
         form.addRow("", self.slot)
 
@@ -150,19 +167,23 @@ class TextTab(QWidget):
         lay.addLayout(form)
         lay.addWidget(QLabel(tr("Vorschau (so werden die Zeichen gerastert):")))
         lay.addWidget(self.preview)
+        lay.addWidget(self.fit_label)
         lay.addWidget(send)
         lay.addStretch()
 
         for sig in (self.text.textChanged, self.font.currentIndexChanged, self.height_spin.valueChanged,
+                    self.size_spin.valueChanged, self.spacing_spin.valueChanged, self.effect.currentIndexChanged,
                     self.threshold.valueChanged, self.color.changed, self.bg.changed, self.bg_on.toggled):
             sig.connect(self.update_preview)
         device.stateChanged.connect(lambda _s: send.setEnabled(device.connected))
         send.setEnabled(device.connected)
         self.update_preview()
 
-    def set_panel_size(self, _width: int, height: int) -> None:
+    def set_panel_size(self, width: int, height: int) -> None:
+        self.panel_width = width
         self.panel_height = height
         self.height_spin.setValue(min(height, 64))
+        self.update_preview()
 
     def _glyphs(self):
         return render.glyphs(
@@ -171,7 +192,22 @@ class TextTab(QWidget):
             self.color.color,
             self.font.currentData(),
             self.threshold.value(),
+            spacing=self.spacing_spin.value(),
+            size=self.size_spin.value(),
         )
+
+    def _update_fit(self, gl) -> None:
+        width, panel = render.text_width(gl), self.panel_width
+        if width <= panel:
+            text = tr("{width} von {panel} Pixel – passt auf eine Seite", width=width, panel=panel)
+        elif self.effect.currentData() in SCROLLING_EFFECTS:
+            text = tr("{width} von {panel} Pixel – zu breit für eine Seite, läuft als Lauftext durch",
+                      width=width, panel=panel)
+        else:
+            text = tr("{width} von {panel} Pixel – zu breit: dieser Effekt zeigt den Text auf {pages} Seiten. "
+                      "Kleinere Schrift, weniger Abstand oder ein Lauf-Effekt helfen.",
+                      width=width, panel=panel, pages=render.pages(gl, panel))
+        self.fit_label.setText(text)
 
     def update_preview(self) -> None:
         try:
@@ -191,9 +227,16 @@ class TextTab(QWidget):
                     if bits[y * row_bytes + gx // 8] >> (gx % 8) & 1:
                         img.putpixel((x + gx, y), rgb)
             x += w
-        scale = max(1, min(6, 600 // width, 72 // h))
+        scale = max(1, min(6, 600 // max(width, self.panel_width), 72 // h))
         pm = QPixmap.fromImage(pil_to_qimage(img)).scaled(width * scale, h * scale)
+        if width > self.panel_width:
+            # Mark where the panel ends.
+            qp = QPainter(pm)
+            qp.setPen(QPen(QColor(255, 60, 60), 1, Qt.PenStyle.DashLine))
+            qp.drawLine(self.panel_width * scale, 0, self.panel_width * scale, h * scale)
+            qp.end()
         self.preview.setPixmap(pm)
+        self._update_fit(gl)
 
     def send(self) -> None:
         text = self.text.text()

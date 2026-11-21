@@ -295,12 +295,14 @@ class IPixel:
         height: int | None = None,
         font: str | Path | None = None,
         slot: int = p.SLOT_TEMPORARY,
+        size: int | None = None,
+        spacing: int = 1,
     ) -> None:
         w, h = self.size
         glyph_height = height or min(h, 64)
         border = (0, 0, 0) if self.info and self.info.has_border_fields else None
         body = p.text_payload(
-            render.glyphs(text, glyph_height, color, font),
+            render.glyphs(text, glyph_height, color, font, size=size, spacing=spacing),
             color,
             background,
             effect=effect,

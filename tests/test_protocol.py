@@ -150,6 +150,29 @@ def test_render_sizes():
     assert render.to_png(img, 32, 32)[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_default_text_fits_64_px_panel():
+    """Regression: "Hello world" was 84 px wide at 16 rows and the panel split it into two screens."""
+    gl = render.glyphs("Hello world", 16, (255, 255, 255))
+    assert render.text_width(gl) <= 64
+    assert render.pages(gl, 64) == 1
+
+
+def test_glyphs_are_cropped_with_fixed_spacing():
+    tight = render.glyphs("HH", 16, (255, 255, 255), spacing=0)
+    loose = render.glyphs("HH", 16, (255, 255, 255), spacing=2)
+    assert loose[0][0] == tight[0][0] + 2
+    w, h, bits, _ = tight[0]
+    rb = (w + 7) // 8
+    lit_cols = {x for y in range(h) for x in range(w) if bits[y * rb + x // 8] >> (x % 8) & 1}
+    assert min(lit_cols) == 0 and max(lit_cols) == w - 1
+
+
+def test_pages_breaks_between_glyphs():
+    g = [(30, 16, b"", (0, 0, 0))] * 3
+    assert render.pages(g, 64) == 2
+    assert render.pages(g[:2], 64) == 1
+
+
 def test_glyphs_have_requested_height_and_packed_length():
     gl = render.glyphs("Hi", 16, (0, 255, 0))
     assert len(gl) == 2

@@ -50,8 +50,10 @@ def _parser() -> argparse.ArgumentParser:
     t.add_argument("--bg", type=_color)
     t.add_argument("--effect", choices=[e.name.lower() for e in p.TextEffect], default="scroll_left")
     t.add_argument("--speed", type=int, default=50)
-    t.add_argument("--height", type=int)
-    t.add_argument("--font")
+    t.add_argument("--height", type=int, help="glyph rows (default: panel height)")
+    t.add_argument("--size", type=int, help="font size in px (default: 3/4 of the height)")
+    t.add_argument("--spacing", type=int, default=1, help="empty columns between characters")
+    t.add_argument("--font", help="path to a TrueType/OpenType font")
     t.add_argument("--slot", type=int, default=p.SLOT_TEMPORARY)
 
     for name in ("image", "gif", "frame"):
@@ -105,7 +107,7 @@ async def _run(args: argparse.Namespace) -> None:
             case "text":
                 await px.text(
                     args.text, args.color, args.bg, p.TextEffect[args.effect.upper()],
-                    args.speed, args.height, args.font, args.slot,
+                    args.speed, args.height, args.font, args.slot, args.size, args.spacing,
                 )
             case "image":
                 await px.image(args.path, args.slot, args.fit)

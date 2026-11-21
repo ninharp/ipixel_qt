@@ -155,6 +155,17 @@ def test_unsupported_features_are_greyed_out(window):
     assert box.isEnabledTo(tab) and box.title() == "Anzeigetafel"
 
 
+def test_text_tab_reports_fit(window):
+    tab = window.text_tab
+    tab.text.setText("Hello world")
+    assert "passt auf eine Seite" in tab.fit_label.text()
+    tab.size_spin.setValue(16)
+    tab.effect.setCurrentIndex(tab.effect.findData(5))  # blink: static
+    assert "2 Seiten" in tab.fit_label.text()
+    tab.effect.setCurrentIndex(tab.effect.findData(1))  # scroll left
+    assert "Lauftext" in tab.fit_label.text()
+
+
 def test_text_preview_renders(window):
     window.text_tab.text.setText("Test")
     assert window.text_tab.preview.pixmap() is not None

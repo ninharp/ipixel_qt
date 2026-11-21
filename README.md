@@ -122,7 +122,9 @@ start and can be switched under View → Language / Sprache (the app offers to r
   durations, onion skin, preview playback, undo/redo. Opens PNG/GIF/JPEG, saves losslessly as
   (A)PNG, exports GIF. Sends a single image (PNG) or the animation (GIF), either display-only or
   stored in slot 1–99. **Live:** every edit and the playing preview appear on the panel at once.
-- **Text:** system fonts, height, threshold, colour, background, effect, speed, raster preview.
+- **Text:** system fonts, row height, font size, letter spacing, threshold, colour, background,
+  effect, speed, raster preview. Shows whether the text fits the panel: static effects (fixed,
+  blink, breathe, …) split wider text into screens, the scrolling effects run it through.
 - **Control:** power, rotate 180°, clock, set time, countdown, stopwatch, scoreboard,
   delete slots, raw commands with their reply.
 - **Screen mirror:** streams a screen region (fixed or around the mouse pointer) live to the panel.
