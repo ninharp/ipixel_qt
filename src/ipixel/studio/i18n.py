@@ -158,9 +158,20 @@ EN: dict[str, str] = {
     "Anzeigen": "Show",
     "Stand {left}:{right}": "Score {left}:{right}",
     "Gespeicherte Programme": "Stored programs",
-    "z. B. 1, 3, 4": "e.g. 1, 3, 4",
-    "Plätze löschen": "Delete slots",
-    "Plätze als Zahlen mit Komma angeben": "Enter slots as comma-separated numbers",
+    "Ausgewählte abspielen": "Play selected",
+    "Das Panel zeigt die angehakten Programme im Wechsel (Doppelklick: nur dieses)":
+        "The panel shows the ticked programs in rotation (double-click: just this one)",
+    "Ausgewählte löschen": "Delete selected",
+    "Alle löschen …": "Delete all …",
+    "Das Panel meldet nicht, welche Plätze belegt sind. Die Liste führt das Studio "
+    "selbst und kennt nur, was du von hier aus auf einen Platz gesendet hast.":
+        "The panel does not report which slots are in use. The studio keeps this list itself "
+        "and only knows what you sent to a slot from here.",
+    "Platz {slot} · {kind} · {name}": "Slot {slot} · {kind} · {name}",
+    "Animation": "Animation",
+    "Spiele Plätze {slots}": "Playing slots {slots}",
+    "frei": "free",
+    "Nächsten freien Programmplatz eintragen": "Use the next free program slot",
     "Plätze {slots} gelöscht": "Slots {slots} deleted",
     "Alle Programme löschen …": "Delete all programs …",
     "Alles löschen": "Delete everything",

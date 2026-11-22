@@ -6,8 +6,8 @@ import os
 from pathlib import Path
 
 from PIL import Image
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen, QPixmap
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
     QSlider,
@@ -32,6 +34,7 @@ from .device import DeviceController
 from .editor import color_icon, pil_to_qimage
 from .i18n import tr
 from .model import Color
+from .programs import Program, ProgramStore, encode_thumb
 
 FONT_DIRS = [
     # macOS
@@ -96,6 +99,7 @@ class TextTab(QWidget):
     def __init__(self, device: DeviceController, parent: QWidget | None = None):
         super().__init__(parent)
         self.device = device
+        self.programs: ProgramStore | None = None
         self.panel_width = 64
         self.panel_height = 16
 
@@ -167,7 +171,13 @@ class TextTab(QWidget):
         form.addRow(tr("Schriftgröße"), self.size_spin)
         form.addRow(tr("Zeichenabstand"), self.spacing_spin)
         form.addRow(tr("Schwelle"), self.threshold)
-        form.addRow("", self.slot)
+        slot_row = QHBoxLayout()
+        slot_row.addWidget(self.slot, 1)
+        free = QPushButton(tr("frei"))
+        free.setToolTip(tr("Nächsten freien Programmplatz eintragen"))
+        free.clicked.connect(lambda: self.slot.setValue(self.programs.next_free() if self.programs else 1))
+        slot_row.addWidget(free)
+        form.addRow("", slot_row)
 
         lay = QVBoxLayout(self)
         lay.addLayout(form)
@@ -280,22 +290,40 @@ class TextTab(QWidget):
             border=border,
         )
         slot = self.slot.value() or p.SLOT_TEMPORARY
-        self.device.upload(tr("Text"), tr("Text „{text}“ gesendet", text=text), p.Upload.TEXT, body, slot)
+        program = Program(slot, "text", text, encode_thumb(self._thumbnail(gl)))
+        self.device.upload(tr("Text"), tr("Text „{text}“ gesendet", text=text), p.Upload.TEXT, body, slot, program)
+
+    def _thumbnail(self, gl) -> Image.Image:
+        """First screen of the text as the panel shows it."""
+        h = self.height_spin.value()
+        img = Image.new("RGB", (self.panel_width, h))
+        x = 0
+        for w, gh, bits, rgb in gl:
+            rb = (w + 7) // 8
+            for y in range(gh):
+                for gx in range(w):
+                    if x + gx < self.panel_width and bits[y * rb + gx // 8] >> (gx % 8) & 1:
+                        img.putpixel((x + gx, y), rgb)
+            x += w
+            if x >= self.panel_width:
+                break
+        return img
 
 
 class ControlTab(QWidget):
-    def __init__(self, device: DeviceController, parent: QWidget | None = None):
+    def __init__(self, device: DeviceController, programs: ProgramStore, parent: QWidget | None = None):
         super().__init__(parent)
         self.device = device
+        self.programs = programs
         self.feature_boxes: dict[p.Feature, tuple[QGroupBox, str]] = {}
         grid = QGridLayout(self)
         grid.addWidget(self._panel_box(), 0, 0)
         grid.addWidget(self._clock_box(), 0, 1)
-        grid.addWidget(self._countdown_box(), 1, 0)
-        grid.addWidget(self._stopwatch_box(), 1, 1)
-        grid.addWidget(self._score_box(), 2, 0)
-        grid.addWidget(self._storage_box(), 2, 1)
-        grid.addWidget(self._raw_box(), 3, 0, 1, 2)
+        grid.addWidget(self._programs_box(), 1, 0, 1, 2)
+        grid.addWidget(self._countdown_box(), 2, 0)
+        grid.addWidget(self._stopwatch_box(), 2, 1)
+        grid.addWidget(self._score_box(), 3, 0)
+        grid.addWidget(self._raw_box(), 3, 1)
         grid.setRowStretch(4, 1)
         device.stateChanged.connect(lambda _s: self.setEnabled(device.connected))
         device.infoChanged.connect(lambda _i: self.apply_features(device.features))
@@ -429,37 +457,83 @@ class ControlTab(QWidget):
         l, r = self.left.value(), self.right.value()
         self._run(tr("Stand {left}:{right}", left=l, right=r), lambda px: px.scoreboard(l, r))
 
-    def _storage_box(self) -> QGroupBox:
+    def _programs_box(self) -> QGroupBox:
         box = QGroupBox(tr("Gespeicherte Programme"))
         lay = QVBoxLayout(box)
+        self.program_list = QListWidget()
+        self.program_list.setIconSize(QSize(128, 32))
+        self.program_list.setMinimumHeight(140)
+        self.program_list.itemDoubleClicked.connect(lambda item: self._play([item.data(Qt.ItemDataRole.UserRole)]))
+        lay.addWidget(self.program_list)
         row = QHBoxLayout()
-        slots = QLineEdit()
-        slots.setPlaceholderText(tr("z. B. 1, 3, 4"))
-        delete = QPushButton(tr("Plätze löschen"))
-
-        def delete_slots() -> None:
-            try:
-                nums = [int(s) for s in slots.text().replace(";", ",").split(",") if s.strip()]
-            except ValueError:
-                self.device.error.emit(tr("Plätze als Zahlen mit Komma angeben"))
-                return
-            if nums:
-                self._run(tr("Plätze {slots} gelöscht", slots=nums), lambda px: px.delete_slots(nums))
-
-        delete.clicked.connect(delete_slots)
-        row.addWidget(slots)
-        row.addWidget(delete)
-        lay.addLayout(row)
-        clear = QPushButton(tr("Alle Programme löschen …"))
+        play = QPushButton(tr("Ausgewählte abspielen"))
+        play.setToolTip(tr("Das Panel zeigt die angehakten Programme im Wechsel (Doppelklick: nur dieses)"))
+        play.clicked.connect(lambda: self._play(self._checked()))
+        delete = QPushButton(tr("Ausgewählte löschen"))
+        delete.clicked.connect(self._delete_checked)
+        clear = QPushButton(tr("Alle löschen …"))
         clear.clicked.connect(self._clear_all)
-        lay.addWidget(clear)
+        for b in (play, delete, clear):
+            row.addWidget(b)
+        lay.addLayout(row)
+        hint = QLabel(tr("Das Panel meldet nicht, welche Plätze belegt sind. Die Liste führt das Studio "
+                         "selbst und kennt nur, was du von hier aus auf einen Platz gesendet hast."))
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: gray; font-size: 11px")
+        lay.addWidget(hint)
+        self.programs.changed.connect(self._refresh_programs)
+        self._refresh_programs()
         return box
+
+    def _refresh_programs(self) -> None:
+        previous = {self.program_list.item(i).data(Qt.ItemDataRole.UserRole):
+                    self.program_list.item(i).checkState() == Qt.CheckState.Checked
+                    for i in range(self.program_list.count())}
+        self.program_list.clear()
+        kinds = {"image": tr("Bild"), "animation": tr("Animation"), "text": tr("Text")}
+        for prog in self.programs.sorted():
+            item = QListWidgetItem(tr("Platz {slot} · {kind} · {name}", slot=prog.slot,
+                                      kind=kinds.get(prog.kind, prog.kind), name=prog.name))
+            item.setData(Qt.ItemDataRole.UserRole, prog.slot)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            # New programs start ticked; known ones keep their tick.
+            item.setCheckState(Qt.CheckState.Checked if previous.get(prog.slot, True) else Qt.CheckState.Unchecked)
+            if (thumb := prog.thumbnail()) is not None:
+                item.setIcon(QIcon(QPixmap.fromImage(pil_to_qimage(thumb)).scaled(128, 32)))
+            self.program_list.addItem(item)
+
+    def _checked(self) -> list[int]:
+        return [self.program_list.item(i).data(Qt.ItemDataRole.UserRole)
+                for i in range(self.program_list.count())
+                if self.program_list.item(i).checkState() == Qt.CheckState.Checked]
+
+    def _play(self, slots: list[int]) -> None:
+        if slots:
+            self._run(tr("Spiele Plätze {slots}", slots=", ".join(map(str, slots))),
+                      lambda px: px.play_slots(slots))
+
+    def _delete_checked(self) -> None:
+        slots = self._checked()
+        if not slots:
+            return
+
+        async def job(px) -> None:
+            await px.delete_slots(slots)
+            self.programs.remove(slots)
+
+        self._run(tr("Plätze {slots} gelöscht", slots=", ".join(map(str, slots))), job)
 
     def _clear_all(self) -> None:
         answer = QMessageBox.question(
             self, tr("Alles löschen"), tr("Alle auf dem Panel gespeicherten Programme löschen?"))
-        if answer == QMessageBox.StandardButton.Yes:
-            self._run(tr("Alles gelöscht"), lambda px: px.clear())
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        async def job(px) -> None:
+            await px.clear()
+            self.programs.clear()
+
+        self._run(tr("Alles gelöscht"), job)
 
     def _raw_box(self) -> QGroupBox:
         box = QGroupBox(tr("Rohbefehl (für Experimente)"))

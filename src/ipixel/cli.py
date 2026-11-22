@@ -33,6 +33,10 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("on")
     sub.add_parser("off")
     sub.add_parser("clear", help="delete all stored programs")
+    pl = sub.add_parser("play", help="play these stored slots in rotation")
+    pl.add_argument("slots", type=int, nargs="+")
+    de = sub.add_parser("delete", help="delete these stored slots")
+    de.add_argument("slots", type=int, nargs="+")
 
     b = sub.add_parser("brightness")
     b.add_argument("level", type=int)
@@ -112,6 +116,10 @@ async def _run(args: argparse.Namespace) -> None:
                 await px.power(args.cmd == "on")
             case "clear":
                 await px.clear()
+            case "play":
+                await px.play_slots(args.slots)
+            case "delete":
+                await px.delete_slots(args.slots)
             case "brightness":
                 await px.brightness(args.level)
             case "flip":

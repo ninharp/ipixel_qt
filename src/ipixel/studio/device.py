@@ -27,6 +27,7 @@ class DeviceController(QObject):
     liveChanged = Signal(bool)
     passwordNeeded = Signal(str)
     progress = Signal(str, int, int)  # what, bytes done, bytes total
+    programStored = Signal(object)  # studio Program, after a successful slot upload
 
     DISCONNECTED = "getrennt"
     CONNECTING = "verbinde…"
@@ -35,6 +36,7 @@ class DeviceController(QObject):
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
         self.px: IPixel | None = None
+        self.target = ""
         self.state = self.DISCONNECTED
         self.live = False
         self._lock = asyncio.Lock()
@@ -76,6 +78,7 @@ class DeviceController(QObject):
         self._spawn(self._connect(target, password))
 
     async def _connect(self, target: str, password: str | None) -> None:
+        self.target = target
         self._set_state(self.CONNECTING)
         px = IPixel(target, password=password, on_disconnect=self._lost)
         try:
@@ -127,8 +130,13 @@ class DeviceController(QObject):
             return
         self._spawn(self._run(label, job, keep_live))
 
-    def upload(self, what: str, done_label: str, kind: p.Upload, data: bytes, slot: int) -> None:
-        """Queue an upload that reports its progress via the ``progress`` signal."""
+    def upload(
+        self, what: str, done_label: str, kind: p.Upload, data: bytes, slot: int, program: object | None = None
+    ) -> None:
+        """Queue an upload that reports its progress via the ``progress`` signal.
+
+        ``program`` (a studio Program) is announced via ``programStored`` once a slot upload succeeded.
+        """
         def report(done: int, total: int) -> None:
             self.progress.emit(what, done, total)
 
@@ -138,6 +146,8 @@ class DeviceController(QObject):
             finally:
                 # Always close the progress display, also when the upload failed.
                 self.progress.emit(what, 1, 1)
+            if program is not None and slot != p.SLOT_TEMPORARY:
+                self.programStored.emit(program)
 
         self.run(done_label, job)
 

@@ -83,6 +83,9 @@ ipixel image photo.jpg --fit cover
 ipixel gif cat.gif
 ipixel frame picture.png              # live frame (raw RGB, not stored)
 ipixel clock --style 2
+ipixel gif cat.gif --slot 2           # store as program 2 instead of only showing it
+ipixel play 1 2                       # play stored programs 1 and 2 in rotation
+ipixel delete 2                       # delete stored program 2
 ipixel raw "05000780 01"              # send any frame and print the reply
 ```
 
@@ -126,8 +129,10 @@ start and can be switched under View → Language / Sprache (the app offers to r
   effect, speed (0 slow … 100 fast, default 30), raster preview. Shows whether the text fits the
   panel: static effects (fixed, blink, breathe, …) show wider text screen by screen, breaking at
   spaces; the scrolling effects run it through.
-- **Control:** power, rotate 180°, clock, set time, countdown, stopwatch, scoreboard,
-  delete slots, raw commands with their reply.
+- **Control:** power, rotate 180°, clock, set time, countdown, stopwatch, scoreboard, raw
+  commands with their reply, and the list of **stored programs**: everything you send to a slot
+  (1–99) appears there with a thumbnail; tick programs to play them in rotation or delete them.
+  The panel cannot report its slots, so the studio keeps this list itself, per panel.
 - **Screen mirror:** streams a screen region (fixed or around the mouse pointer) live to the panel.
 
 ![Editor](docs/screenshots/editor-en.png)
@@ -200,6 +205,7 @@ Every frame: `len:u16le` (including these two bytes) · `cmd:2` · payload.
 | Scrolling text speed | `05 00 03 01 <n>` |
 | Delete everything | `04 00 03 80` |
 | Delete slots | `len 02 01 <count:u16le> <slots…>` |
+| Play slots in rotation | `len 08 80 <count:u16le> <slots…>` |
 | Countdown | `07 00 0d 80 <action> <min> <sec>` (0 reset, 1 start, 2 pause, 3 resume) |
 | Stopwatch | `05 00 09 80 <action>` (same as countdown) |
 | Scoreboard | `08 00 0a 80 <left:u16le> <right:u16le>` |

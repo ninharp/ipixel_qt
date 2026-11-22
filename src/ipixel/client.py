@@ -263,6 +263,10 @@ class IPixel:
         """Delete every stored program on the panel."""
         await self.send(p.clear_all())
 
+    async def play_slots(self, slots: list[int]) -> None:
+        """Show these stored programs in rotation. The panel does not report which slots exist."""
+        await self.send(p.play_slots(slots))
+
     async def delete_slots(self, slots: list[int]) -> None:
         await self.send(p.delete_slots(slots))
 

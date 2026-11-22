@@ -33,6 +33,8 @@ NOW = dt.datetime(2026, 11, 21, 17, 45, 9)  # Saturday
         (p.stopwatch(p.TimerAction.PAUSE), [5, 0, 9, 0x80, 2]),
         (p.scoreboard(258, 3), [8, 0, 10, 0x80, 2, 1, 3, 0]),
         (p.delete_slots([1, 3]), [8, 0, 2, 1, 2, 0, 1, 3]),
+        # ChannelListActivity.SendChannel: [len, 0, 8, 0x80, count, 0, slots...]
+        (p.play_slots([1, 2, 5]), [9, 0, 8, 0x80, 3, 0, 1, 2, 5]),
         (p.verify_password("1234"), [7, 0, 5, 2, 12, 34, 0]),
         (p.verify_password("123456"), [7, 0, 5, 2, 12, 34, 56]),
         (p.set_password(True, "0102"), [8, 0, 4, 2, 1, 1, 2, 0]),

@@ -222,6 +222,11 @@ def scoreboard(left: int, right: int) -> bytes:
     return frame(b"\x0a\x80", struct.pack("<HH", _clamp(left, 0, 999), _clamp(right, 0, 999)))
 
 
+def play_slots(slots: list[int]) -> bytes:
+    """Play these stored programs in rotation (the vendor app's channel list 'send')."""
+    return frame(b"\x08\x80", struct.pack("<H", len(slots)) + bytes(_clamp(s, 0, 255) for s in slots))
+
+
 def delete_slots(slots: list[int]) -> bytes:
     body = struct.pack("<H", len(slots)) + bytes(_clamp(s, 0, 255) for s in slots)
     return frame(b"\x02\x01", body)

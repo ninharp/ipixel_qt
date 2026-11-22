@@ -37,6 +37,7 @@ from .device import DeviceController
 from .editor import EditorTab, pil_to_qimage
 from .i18n import LANGUAGES, language, set_language, tr
 from .model import Animation
+from .programs import ProgramStore
 from .tabs import ControlTab, MirrorTab, TextTab
 
 APP_NAME = "iPixel Studio"
@@ -113,9 +114,11 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(app_icon())
         self.resize(1180, 760)
 
+        self.programs = ProgramStore(self.settings, self)
         self.editor = EditorTab(self.doc, self.device)
         self.text_tab = TextTab(self.device)
-        self.control_tab = ControlTab(self.device)
+        self.control_tab = ControlTab(self.device, self.programs)
+        self.editor.programs = self.text_tab.programs = self.programs
         self.mirror_tab = MirrorTab(self.device)
         for tab in (self.text_tab, self.mirror_tab):
             tab.set_panel_size(width, height)
@@ -147,6 +150,7 @@ class MainWindow(QMainWindow):
         d.passwordNeeded.connect(self._ask_password)
         self._progress: QProgressDialog | None = None
         d.progress.connect(self._show_progress)
+        d.programStored.connect(self.programs.record)
         self.doc.subscribe(self._update_title)
         self._state_changed(d.state)
         self._update_title()
@@ -319,6 +323,7 @@ class MainWindow(QMainWindow):
         self.brightness.setEnabled(connected)
 
     def _info_changed(self, info) -> None:
+        self.programs.set_device(self.device.target)
         if info.width is None:
             self._error(tr("Unbekannter Paneltyp 0x{type:02x}; Größe bitte über Bearbeiten einstellen", type=info.type_byte))
             return
@@ -387,6 +392,7 @@ class MainWindow(QMainWindow):
 
     def _update_title(self) -> None:
         name = self.title_name or tr("Unbenannt")
+        self.editor.doc_name = name
         n = len(self.doc.frames)
         frames = tr("{count} Bild", count=n) if n == 1 else tr("{count} Bilder", count=n)
         self.setWindowTitle(f"{name} – {frames} – {APP_NAME}")

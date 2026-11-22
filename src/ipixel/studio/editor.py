@@ -41,6 +41,7 @@ from .. import protocol as p
 from .device import DeviceController
 from .i18n import language, tr
 from .model import Animation, Box, Color, Point
+from .programs import Program, ProgramStore, encode_thumb
 
 PALETTE: list[Color] = [
     (0, 0, 0), (255, 255, 255), (128, 128, 128), (64, 64, 64),
@@ -382,6 +383,8 @@ class EditorTab(QWidget):
         super().__init__(parent)
         self.doc = doc
         self.device = device
+        self.programs: ProgramStore | None = None
+        self.doc_name = tr("Unbenannt")
         self.canvas = PixelCanvas(doc)
         self.timeline = Timeline(doc)
         self._frame_count = len(doc.frames)
@@ -600,7 +603,14 @@ class EditorTab(QWidget):
         self.send_anim.clicked.connect(self.send_animation)
         self.live_cb = QCheckBox(tr("Live: jede Änderung sofort zeigen"))
         self.live_cb.toggled.connect(self._toggle_live)
-        lay.addWidget(self.slot)
+        slot_row = QHBoxLayout()
+        slot_row.addWidget(self.slot, 1)
+        free = QToolButton()
+        free.setText(tr("frei"))
+        free.setToolTip(tr("Nächsten freien Programmplatz eintragen"))
+        free.clicked.connect(lambda: self.slot.setValue(self.programs.next_free() if self.programs else 1))
+        slot_row.addWidget(free)
+        lay.addLayout(slot_row)
         lay.addWidget(self.send_image)
         lay.addWidget(self.send_anim)
         lay.addSpacing(8)
@@ -644,7 +654,8 @@ class EditorTab(QWidget):
 
     def send_current(self) -> None:
         data, slot = self.doc.png_bytes(), self._slot()
-        self.device.upload(tr("Bild"), tr("Bild gesendet"), p.Upload.PNG, data, slot)
+        program = Program(slot, "image", self.doc_name, encode_thumb(self.doc.image))
+        self.device.upload(tr("Bild"), tr("Bild gesendet"), p.Upload.PNG, data, slot, program)
 
     def send_animation(self) -> None:
         if not self.doc.is_animated:
@@ -652,8 +663,9 @@ class EditorTab(QWidget):
             return
         data, slot = self.doc.gif_bytes(), self._slot()
         n = len(self.doc.frames)
+        program = Program(slot, "animation", self.doc_name, encode_thumb(self.doc.frames[0].image))
         self.device.upload(tr("Animation ({count} Bilder)", count=n), tr("Animation ({count} Bilder) gesendet", count=n),
-                           p.Upload.GIF, data, slot)
+                           p.Upload.GIF, data, slot, program)
 
     def _toggle_live(self, on: bool) -> None:
         self.device.set_live(on)

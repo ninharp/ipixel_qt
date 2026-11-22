@@ -189,6 +189,52 @@ def test_window_title_shows_opened_gif_name(window, monkeypatch):
     assert window.windowTitle().startswith("Unbenannt")
 
 
+def test_program_list_records_plays_and_deletes(window, monkeypatch):
+    import asyncio
+
+    from ipixel.studio.programs import Program, encode_thumb
+
+    store, tab = window.programs, window.control_tab
+    store.set_device("LED_BLE_TEST")
+    store.record(Program(2, "animation", "feuer.gif", encode_thumb(window.doc.image)))
+    store.record(Program(1, "text", "Hallo", ""))
+    assert [tab.program_list.item(i).text() for i in range(tab.program_list.count())] == [
+        "Platz 1 · Text · Hallo", "Platz 2 · Animation · feuer.gif"]
+    assert store.next_free() == 3
+
+    jobs = []
+    monkeypatch.setattr(window.device, "run", lambda label, job, keep_live=False: jobs.append((label, job)))
+    tab._play(tab._checked())
+    assert jobs[-1][0] == "Spiele Plätze 1, 2"
+
+    class FakePx:
+        deleted = None
+
+        async def delete_slots(self, slots):
+            FakePx.deleted = slots
+
+    tab.program_list.item(0).setCheckState(Qt.CheckState.Unchecked)
+    tab._delete_checked()
+    asyncio.run(jobs[-1][1](FakePx()))
+    assert FakePx.deleted == [2]
+    assert [p.slot for p in store.sorted()] == [1]
+
+    store.set_device("OTHER_PANEL")
+    assert store.sorted() == []
+    store.set_device("LED_BLE_TEST")
+    assert [p.slot for p in store.sorted()] == [1]  # kept per panel
+
+
+def test_send_to_slot_records_program(window, monkeypatch):
+    sent = []
+    monkeypatch.setattr(window.device, "upload", lambda *a: sent.append(a))
+    window.editor.slot.setValue(4)
+    window.editor.send_current()
+    program = sent[0][-1]
+    assert program.slot == 4 and program.kind == "image" and program.name == "Unbenannt"
+    assert program.thumbnail().size == (64, 16)
+
+
 def test_send_buttons_disabled_while_disconnected(window):
     assert not window.editor.send_image.isEnabled()
     assert not window.control_tab.isEnabled()
