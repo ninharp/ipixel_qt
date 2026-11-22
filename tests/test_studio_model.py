@@ -165,6 +165,33 @@ def test_crossfade_loop_blends_tail_into_head():
     assert abs(lv[-1] - lv[0]) < abs(90 - 0)
 
 
+def test_find_loop_picks_the_most_similar_pair():
+    a = Animation(2, 1)
+    levels = [0, 50, 100, 150, 52, 200, 250]  # frame 4 nearly repeats frame 1
+    a.clear((0, 0, 0))
+    for lv in levels[1:]:
+        a.add_frame(False)
+        a.clear((lv,) * 3)
+    start, end, diff = a.find_loop(min_frames=2)
+    assert (start, end) == (1, 4) and diff == 2
+    a.trim_to_loop(start, end)
+    assert _levels(a) == [50, 100, 150]
+    a.undo()
+    assert len(a.frames) == 7
+
+
+def test_find_loop_is_fast_enough_for_long_animations():
+    import time
+
+    a = Animation(64, 16)
+    for i in range(119):
+        a.add_frame(False)
+        a.plot([(i % 64, i % 16)], (255, 0, 0))
+    t = time.time()
+    a.find_loop(min_frames=20)
+    assert time.time() - t < 5
+
+
 def test_resize_canvas_keeps_pixels():
     a = Animation(4, 4)
     a.plot([(1, 1)], RED)

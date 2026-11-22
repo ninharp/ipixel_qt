@@ -157,6 +157,10 @@ def test_loop_menu_entries(window, monkeypatch):
     monkeypatch.setattr(QInputDialog, "getInt", lambda *a, **k: (3, True))
     acts["Schleife: Ende in Anfang überblenden …"].trigger()
     assert len(doc.frames) == 7
+    window.undo_act.trigger()
+    acts["Schleife: beste Schnittstelle suchen …"].trigger()
+    assert 3 <= len(doc.frames) < 10
+    assert "Schleife: Bilder" in window.statusBar().currentMessage()
     assert window.editor.timeline.position.text().startswith("Bild ")
 
 

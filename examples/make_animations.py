@@ -1,5 +1,8 @@
 """Generate the example animations in examples/animations for a 64x16 panel.
 
+Every animation loops seamlessly: periodic ones are built with whole periods per loop, the
+random fire is cut where a frame nearly repeats an earlier one.
+
     uv run python examples/make_animations.py [output-dir]
 """
 
@@ -12,15 +15,12 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from ipixel import render
-from ipixel.studio.model import Animation
+from ipixel.studio.model import Animation, Frame
 
 W, H = 64, 16
 OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent / "animations"
 OUT.mkdir(parents=True, exist_ok=True)
 random.seed(7)
-
-# Animations whose last frame does not lead into the first get a crossfaded "-loop" version.
-LOOPS = {"feuer": 10, "matrix-regen": 8, "sternenfeld": 10, "equalizer": 6, "feuerwerk": 10}
 
 
 def hsv(h, s=1.0, v=1.0):
@@ -37,10 +37,12 @@ def blank():
 
 
 def fire():
+    """Random flames: simulate long, then cut where a frame nearly repeats an earlier one."""
     pal = [(0, 0, 0)] + [(min(255, i * 12), min(255, max(0, i * 12 - 120)), max(0, i * 12 - 280)) for i in range(1, 36)]
     heat = [[0] * W for _ in range(H)]
-    frames = []
-    for step in range(70):
+    anim = Animation(W, H)
+    anim.frames = []
+    for step in range(30 + 160):
         for x in range(W):
             heat[H - 1][x] = 35 if random.random() < 0.75 else 20
         for y in range(H - 1):
@@ -53,8 +55,9 @@ def fire():
             for y in range(H):
                 for x in range(W):
                     px[x, y] = pal[min(35, heat[y][x])]
-            frames.append(img)
-    save("feuer.gif", frames, 60)
+            anim.frames.append(Frame(img, 60))
+    start, end, _ = anim.find_loop(min_frames=40)
+    save("feuer.gif", [f.image for f in anim.frames[start:end]], 60)
 
 
 def plasma():
@@ -65,7 +68,7 @@ def plasma():
         a = t / 36 * 2 * math.pi
         for y in range(H):
             for x in range(W):
-                v = (math.sin(x / 6 + a) + math.sin((y / 3 + a) / 1.3) + math.sin((x + y) / 8 + a * 2)
+                v = (math.sin(x / 6 + a) + math.sin(y / 3.9 + a) + math.sin((x + y) / 8 + a * 2)
                      + math.sin(math.hypot(x - 32, y - 8) / 4 - a))
                 px[x, y] = hsv(v / 8 + t / 36, 1, 0.9)
         frames.append(img)
@@ -88,38 +91,40 @@ def rainbow_wave():
 
 
 def matrix_rain():
-    drops = [[random.randint(-H, H), random.randint(4, 10), random.choice([1, 1, 2])] for _ in range(W)]
+    """Every column repeats after a whole fraction of the 48 frames, so the loop is seamless."""
+    n = 48
+    columns = []
+    for _ in range(W):
+        speed = random.choice([1, 1, 2])          # frames per step
+        length = random.randint(4, 10)
+        steps = n // speed                          # one full cycle per loop
+        columns.append((speed, length, steps, random.randrange(steps)))
     frames = []
-    for t in range(48):
+    for t in range(n):
         img = blank()
         px = img.load()
-        for x, (y, length, speed) in enumerate(drops):
+        for x, (speed, length, steps, phase) in enumerate(columns):
+            head = (phase + t // speed) % steps - length
             for k in range(length):
-                yy = y - k
+                yy = head - k
                 if 0 <= yy < H:
-                    v = 255 if k == 0 else max(40, 200 - k * 25)
+                    v = max(40, 200 - k * 25)
                     px[x, yy] = (180, 255, 180) if k == 0 else (0, v, 0)
-            if t % speed == 0:
-                drops[x][0] += 1
-            if drops[x][0] - length > H:
-                drops[x] = [random.randint(-6, 0), random.randint(4, 10), random.choice([1, 1, 2])]
         frames.append(img)
     save("matrix-regen.gif", frames, 70)
 
 
 def starfield():
-    stars = [[random.uniform(0, W), random.randint(0, H - 1), random.choice([0.5, 1, 2])] for _ in range(40)]
+    """128 frames: every star (speed 0.5, 1 or 2 px) moves a whole number of panel widths."""
+    n = 128
+    stars = [(random.uniform(0, W), random.randint(0, H - 1), random.choice([0.5, 1, 2])) for _ in range(40)]
     frames = []
-    for _ in range(64):
+    for t in range(n):
         img = blank()
         px = img.load()
-        for s in stars:
-            v = {0.5: 70, 1: 150, 2: 255}[s[2]]
-            px[int(s[0]) % W, s[1]] = (v, v, min(255, v + 30))
-            s[0] -= s[2]
-            if s[0] < 0:
-                s[0] += W
-                s[1] = random.randint(0, H - 1)
+        for x0, y, speed in stars:
+            v = {0.5: 70, 1: 150, 2: 255}[speed]
+            px[math.floor(x0 - speed * t) % W, y] = (v, v, min(255, v + 30))
         frames.append(img)
     save("sternenfeld.gif", frames, 50)
 
@@ -172,15 +177,17 @@ def heart():
 
 
 def equalizer():
-    bars = 16
-    levels = [random.uniform(2, 14) for _ in range(bars)]
+    """Bar heights are sums of sines with whole periods per loop, so frame 0 follows the last."""
+    n, bars = 40, 16
+    waves = [[(random.randint(1, 3), random.uniform(0, 2 * math.pi), random.uniform(2, 5)) for _ in range(2)]
+             for _ in range(bars)]
     frames = []
-    for _ in range(40):
+    for t in range(n):
         img = blank()
         d = ImageDraw.Draw(img)
-        for i in range(bars):
-            levels[i] = max(1, min(16, levels[i] + random.uniform(-4, 4)))
-            top = H - round(levels[i])
+        for i, ws in enumerate(waves):
+            level = 8 + sum(a * math.sin(2 * math.pi * k * t / n + ph) for k, ph, a in ws)
+            top = H - round(max(1, min(16, level)))
             for y in range(top, H):
                 d.line([(i * 4, y), (i * 4 + 2, y)], fill=hsv(0.33 - 0.33 * (H - y) / H))
         frames.append(img)
@@ -188,27 +195,32 @@ def equalizer():
 
 
 def fireworks():
-    frames = []
+    """Six fixed bursts repeat every 72 frames; rendering the second cycle includes the sparks
+    still falling from the first, so the end runs straight into the start."""
+    n, every = 72, 12
+    bursts = [(random.randint(8, W - 8), random.randint(4, 10), random.random(),
+               [random.uniform(0.6, 1.4) for _ in range(18)]) for _ in range(n // every)]
     particles = []
-    for t in range(72):
-        if t % 12 == 0:
-            cx, cy, hue = random.randint(8, W - 8), random.randint(4, 10), random.random()
-            for k in range(18):
+    frames = []
+    for t in range(2 * n):
+        if t % every == 0:
+            cx, cy, hue, speeds = bursts[(t // every) % len(bursts)]
+            for k, sp in enumerate(speeds):
                 ang = k / 18 * 2 * math.pi
-                sp = random.uniform(0.6, 1.4)
                 particles.append([cx, cy, math.cos(ang) * sp, math.sin(ang) * sp * 0.6, 14, hue])
         img = blank()
         px = img.load()
-        for p in particles:
-            p[0] += p[2]
-            p[1] += p[3]
-            p[3] += 0.06
-            p[4] -= 1
-            if p[4] > 0 and 0 <= p[0] < W and 0 <= p[1] < H:
-                px[int(p[0]), int(p[1])] = hsv(p[5], 0.8, p[4] / 14)
-        particles = [p for p in particles if p[4] > 0]
-        frames.append(img)
-    save("feuerwerk.gif", frames[12:], 60)
+        for q in particles:
+            q[0] += q[2]
+            q[1] += q[3]
+            q[3] += 0.06
+            q[4] -= 1
+            if q[4] > 0 and 0 <= q[0] < W and 0 <= q[1] < H:
+                px[int(q[0]), int(q[1])] = hsv(q[5], 0.8, q[4] / 14)
+        particles = [q for q in particles if q[4] > 0]
+        if t >= n:
+            frames.append(img)
+    save("feuerwerk.gif", frames, 60)
 
 
 def scanner():
@@ -254,12 +266,6 @@ def smiley_png():
 for fn in (fire, plasma, rainbow_wave, matrix_rain, starfield, pacman, heart, equalizer, fireworks,
            scanner, snake, smiley_png):
     fn()
-
-for name, overlap in LOOPS.items():
-    anim = Animation(W, H)
-    anim.load(OUT / f"{name}.gif")
-    anim.crossfade_loop(overlap)
-    anim.save(OUT / f"{name}-loop.gif")
 
 for f in sorted(OUT.iterdir()):
     img = Image.open(f)

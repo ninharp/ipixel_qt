@@ -243,6 +243,17 @@ EN: dict[str, str] = {
     "Bild duplizieren": "Duplicate frame",
     "Bild löschen": "Delete frame",
     "Schleife: vor und zurück": "Loop: forward and back",
+    "Schleife: beste Schnittstelle suchen …": "Loop: find best cut …",
+    "Für eine Schleife braucht die Animation mindestens 4 Bilder": "A loop needs at least 4 frames",
+    "Beste Schnittstelle suchen": "Find best cut",
+    "Sucht die zwei ähnlichsten Bilder und kürzt die Animation auf den Bereich dazwischen,\n"
+    "sodass das Ende ohne Überblenden in den Anfang übergeht.\n\n"
+    "Mindestlänge der Schleife in Bildern:":
+        "Finds the two most similar frames and trims the animation to the stretch between them,\n"
+        "so the end runs into the start without blending.\n\n"
+        "Minimum loop length in frames:",
+    "Schleife: Bilder {start}–{end} behalten, Unterschied am Übergang {diff} %":
+        "Loop: kept frames {start}–{end}, difference at the cut {diff} %",
     "Schleife: Ende in Anfang überblenden …": "Loop: blend end into start …",
     "Reihenfolge umkehren": "Reverse order",
     "Für eine Schleife braucht die Animation mindestens 3 Bilder": "A loop needs at least 3 frames",

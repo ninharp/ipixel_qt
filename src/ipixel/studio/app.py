@@ -240,6 +240,7 @@ class MainWindow(QMainWindow):
         self._action(frames, tr("Leeres Bild einfügen"), "Ctrl+Shift+N", lambda: self.doc.add_frame(False))
         self._action(frames, tr("Bild löschen"), "Ctrl+Backspace", self.doc.delete_frame)
         frames.addSeparator()
+        self._action(frames, tr("Schleife: beste Schnittstelle suchen …"), None, self.ask_find_loop)
         self._action(frames, tr("Schleife: vor und zurück"), None, self.doc.pingpong)
         self._action(frames, tr("Schleife: Ende in Anfang überblenden …"), None, self.ask_crossfade)
         self._action(frames, tr("Reihenfolge umkehren"), None, self.doc.reverse)
@@ -447,6 +448,29 @@ class MainWindow(QMainWindow):
         if path:
             self.doc.save(path if path.lower().endswith(".gif") else path + ".gif")
             self._remember_dir(path)
+
+    def ask_find_loop(self) -> None:
+        n = len(self.doc.frames)
+        if n < 4:
+            self._error(tr("Für eine Schleife braucht die Animation mindestens 4 Bilder"))
+            return
+        min_frames, ok = QInputDialog.getInt(
+            self, tr("Beste Schnittstelle suchen"),
+            tr("Sucht die zwei ähnlichsten Bilder und kürzt die Animation auf den Bereich dazwischen,\n"
+               "sodass das Ende ohne Überblenden in den Anfang übergeht.\n\n"
+               "Mindestlänge der Schleife in Bildern:"),
+            max(2, n // 3), 2, n - 1)
+        if not ok:
+            return
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            start, end, diff = self.doc.find_loop(min_frames)
+        finally:
+            QApplication.restoreOverrideCursor()
+        self.doc.trim_to_loop(start, end)
+        self.statusBar().showMessage(
+            tr("Schleife: Bilder {start}–{end} behalten, Unterschied am Übergang {diff} %",
+               start=start + 1, end=end, diff=f"{diff / 2.55:.1f}"), 10000)
 
     def ask_crossfade(self) -> None:
         n = len(self.doc.frames)

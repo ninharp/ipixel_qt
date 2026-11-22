@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageSequence
+from PIL import Image, ImageChops, ImageDraw, ImageSequence, ImageStat
 
 from .. import render
 
@@ -151,6 +151,30 @@ class Animation:
         ]
         self.frames = middle + blended
         self.index = min(self.index, len(self.frames) - 1)
+        self.changed()
+
+    def find_loop(self, min_frames: int) -> tuple[int, int, float]:
+        """Best stretch to loop: frames ``start .. end-1`` where frame ``end`` looks most like ``start``.
+
+        Returns (start, end, difference) with difference = mean absolute pixel difference 0..255.
+        A hard cut there needs no blending, so nothing gets blurry.
+        """
+        n = len(self.frames)
+        if n < min_frames + 1:
+            raise ValueError("animation too short for that loop length")
+        imgs = [f.image.convert("RGB") for f in self.frames]
+        best = (0, n - 1, float("inf"))
+        for start in range(n):
+            for end in range(start + min_frames, n):
+                diff = sum(ImageStat.Stat(ImageChops.difference(imgs[start], imgs[end])).mean) / 3
+                if diff < best[2]:
+                    best = (start, end, diff)
+        return best
+
+    def trim_to_loop(self, start: int, end: int) -> None:
+        self.checkpoint()
+        self.frames = self.frames[start:end]
+        self.index = min(max(0, self.index - start), len(self.frames) - 1)
         self.changed()
 
     def set_duration(self, ms: int, all_frames: bool = False) -> None:
