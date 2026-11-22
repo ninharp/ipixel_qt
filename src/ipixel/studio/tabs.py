@@ -469,11 +469,16 @@ class ControlTab(QWidget):
         play = QPushButton(tr("Ausgewählte abspielen"))
         play.setToolTip(tr("Das Panel zeigt die angehakten Programme im Wechsel (Doppelklick: nur dieses)"))
         play.clicked.connect(lambda: self._play(self._checked()))
+        self.play_one = QPushButton(tr("Nur dieses abspielen"))
+        self.play_one.setToolTip(tr("Spielt nur den markierten Eintrag, ohne Wechsel"))
+        self.play_one.setEnabled(False)
+        self.play_one.clicked.connect(self._play_current)
+        self.program_list.currentItemChanged.connect(lambda cur, _prev: self.play_one.setEnabled(cur is not None))
         delete = QPushButton(tr("Ausgewählte löschen"))
         delete.clicked.connect(self._delete_checked)
         clear = QPushButton(tr("Alle löschen …"))
         clear.clicked.connect(self._clear_all)
-        for b in (play, delete, clear):
+        for b in (self.play_one, play, delete, clear):
             row.addWidget(b)
         lay.addLayout(row)
         hint = QLabel(tr("Das Panel meldet nicht, welche Plätze belegt sind. Die Liste führt das Studio "
@@ -501,6 +506,11 @@ class ControlTab(QWidget):
             if (thumb := prog.thumbnail()) is not None:
                 item.setIcon(QIcon(QPixmap.fromImage(pil_to_qimage(thumb)).scaled(128, 32)))
             self.program_list.addItem(item)
+
+    def _play_current(self) -> None:
+        item = self.program_list.currentItem()
+        if item is not None:
+            self._play([item.data(Qt.ItemDataRole.UserRole)])
 
     def _checked(self) -> list[int]:
         return [self.program_list.item(i).data(Qt.ItemDataRole.UserRole)

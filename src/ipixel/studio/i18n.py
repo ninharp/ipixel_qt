@@ -159,6 +159,8 @@ EN: dict[str, str] = {
     "Stand {left}:{right}": "Score {left}:{right}",
     "Gespeicherte Programme": "Stored programs",
     "Ausgewählte abspielen": "Play selected",
+    "Nur dieses abspielen": "Play only this",
+    "Spielt nur den markierten Eintrag, ohne Wechsel": "Plays only the highlighted entry, no rotation",
     "Das Panel zeigt die angehakten Programme im Wechsel (Doppelklick: nur dieses)":
         "The panel shows the ticked programs in rotation (double-click: just this one)",
     "Ausgewählte löschen": "Delete selected",

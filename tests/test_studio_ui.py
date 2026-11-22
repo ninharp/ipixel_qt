@@ -206,6 +206,12 @@ def test_program_list_records_plays_and_deletes(window, monkeypatch):
     monkeypatch.setattr(window.device, "run", lambda label, job, keep_live=False: jobs.append((label, job)))
     tab._play(tab._checked())
     assert jobs[-1][0] == "Spiele Plätze 1, 2"
+    assert not tab.play_one.isEnabledTo(tab)
+    tab.program_list.setCurrentRow(1)
+    assert tab.play_one.isEnabledTo(tab)
+    tab.setEnabled(True)  # as when connected
+    tab.play_one.click()
+    assert jobs[-1][0] == "Spiele Plätze 2"
 
     class FakePx:
         deleted = None
